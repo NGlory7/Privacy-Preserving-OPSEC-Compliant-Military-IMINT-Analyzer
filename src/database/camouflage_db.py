@@ -244,6 +244,24 @@ CAMOUFLAGE_CATALOG: List[Dict[str, Any]] = [
             "Sahel / Sub-Saharan Africa (ISWAP / ISGS)"
         ],
         "description": "Characteristic all-black tactical attire, balaclavas, and tunics popularized by ISIS/Daesh for parade, execution, and elite shock-troop operations (Jaish al-Khilafa)."
+    },
+    {
+        "id": "camo_east_africa_woodland",
+        "name": "East African / Insurgent Mixed Woodland (Al-Shabaab)",
+        "origin_country": "Somalia / East Africa / Horn of Africa",
+        "pattern_type": "Disruptive Woodland / Brushstroke Variant",
+        "palette_hex": ["#5c534a", "#3e3832", "#766b60", "#1a1416", "#bcad93"],
+        "rgb_palette": [[92, 83, 74], [64, 56, 50], [118, 107, 96], [26, 20, 22], [188, 173, 147]],
+        "primary_operators": [
+            {"country": "Somalia / Horn of Africa (Al-Shabaab)", "branch": "Harakat al-Shabaab al-Mujahideen / Regional Militias", "weight": 0.99},
+            {"country": "Sub-Saharan Africa", "branch": "Regional Insurgent Formations & Bush War Militias", "weight": 0.80}
+        ],
+        "theaters_of_operation": [
+            "Horn of Africa / Somalia (Lower Shabelle / Jubaland / Puntland)",
+            "East Africa / Kenya Borderlands (Boni Forest)",
+            "Sahel / Sub-Saharan Savanna & Scrubland"
+        ],
+        "description": "High-contrast earthy woodland/brushstroke camouflage vest worn over mismatched civil/militant tunics, white calligraphic headbands, and dark balaclavas; hallmark of Al-Shabaab technical teams in southern Somalia."
     }
 ]
 

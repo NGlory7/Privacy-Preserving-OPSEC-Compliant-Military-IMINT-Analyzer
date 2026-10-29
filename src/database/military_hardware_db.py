@@ -28,10 +28,35 @@ HARDWARE_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "origin_country": "USSR / China / Global Production",
             "primary_users": [
                 {"country": "Syria / Iraq (Non-State Armed Group)", "units": "ISIS / Daesh, Syrian Rebel Groups, Iraqi PMF", "weight": 0.99},
+                {"country": "Somalia / Horn of Africa (Al-Shabaab)", "units": "Al-Shabaab, Somali Militias", "weight": 0.95},
                 {"country": "Syria", "units": "Syrian Arab Army (SAA)", "weight": 0.85},
                 {"country": "Middle East / Africa", "units": "Ubiquitous insurgent and irregular forces", "weight": 0.95}
             ],
             "visual_cues": "Classic wood handguard and buttstock, distinctive curved 7.62mm ribbed steel magazine, slant compensator"
+        },
+        {
+            "id": "wpn_rpg7",
+            "name": "RPG-7 Rocket-Propelled Grenade Launcher",
+            "caliber": "40mm Launcher / 85mm PG-7V Warhead",
+            "origin_country": "USSR / Global Production",
+            "primary_users": [
+                {"country": "Somalia / Horn of Africa (Al-Shabaab)", "units": "Al-Shabaab Anti-Armor Units, Technical Crews", "weight": 0.99},
+                {"country": "Syria / Iraq (Non-State Armed Group)", "units": "Insurgents & Irregular forces", "weight": 0.90},
+                {"country": "Global Insurgent / Irregular", "units": "Ubiquitous non-state anti-armor asset", "weight": 0.95}
+            ],
+            "visual_cues": "Conical PG-7V high-explosive warhead protruding from steel tube, wooden heat shield wrapper, dual pistol grips"
+        },
+        {
+            "id": "wpn_pkm",
+            "name": "PKM / Type 80 General-Purpose Machine Gun",
+            "caliber": "7.62x54mmR",
+            "origin_country": "USSR / Global Production",
+            "primary_users": [
+                {"country": "Somalia / Horn of Africa (Al-Shabaab)", "units": "Al-Shabaab Technical Support & Patrol Gunner", "weight": 0.98},
+                {"country": "Russian Federation", "units": "Ground Forces, VDV, Naval Infantry", "weight": 0.90},
+                {"country": "Middle East / Africa", "units": "Militia & Paramilitary forces", "weight": 0.90}
+            ],
+            "visual_cues": "Distinctive long fluted barrel with conical flash hider, top-folding carry handle, non-disintegrating belt feed box"
         },
         {
             "id": "wpn_ak12",
