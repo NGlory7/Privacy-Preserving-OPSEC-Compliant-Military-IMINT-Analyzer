@@ -1,11 +1,17 @@
-"""Model tests: skipped automatically when weights are not downloaded."""
+"""Model tests: skipped automatically when PyTorch/transformers or the weights are missing (e.g. in CI)."""
+
+import importlib.util
 
 import pytest
 from PIL import Image, ImageDraw
 
 from src.models import models_available
 
-pytestmark = pytest.mark.skipif(not all(models_available().values()), reason="run tools/download_models.py first")
+_libs = all(importlib.util.find_spec(m) for m in ("torch", "torchvision", "transformers"))
+pytestmark = pytest.mark.skipif(
+    not _libs or not all(models_available().values()),
+    reason="needs torch + transformers and weights (run tools/download_models.py)",
+)
 
 
 def test_blank_image_gives_no_detections_and_inconclusive():
