@@ -38,7 +38,7 @@ from src.vision.patch_extractor import PatchExtractor  # noqa: E402
 
 EVAL = ROOT / "eval"
 SWEEP = [0.10, 0.15, 0.20, 0.25, 0.30, 0.40]
-EXPECTED_CATEGORY = {"weapon": "weapon", "vehicle": "vehicle", "camouflage": "personnel"}
+EXPECTED_CATEGORY = {"weapon": "weapon", "vehicle": "vehicle", "gear": "gear", "camouflage": "personnel"}
 
 
 def pct(x: float) -> str:
@@ -93,14 +93,14 @@ def main() -> None:
             detection[task]["n"] = len(pos)
         neg = [e for e in per_image if e["task"] == "negative"]
         false_alarm = {}
-        for cat in ("weapon", "vehicle"):
+        for cat in ("weapon", "vehicle", "gear"):
             if neg:
                 false_alarm[cat] = {f"{t:.2f}": sum(e["best"].get(cat, 0) >= t for e in neg) / len(neg) for t in SWEEP}
                 false_alarm[cat]["n"] = len(neg)
 
         # ---- 2/3. identification ----
         ident = {}
-        for task, kind in (("weapon", "weapon"), ("vehicle", "vehicle"), ("camouflage", "camouflage")):
+        for task, kind in (("weapon", "weapon"), ("vehicle", "vehicle"), ("gear", "gear"), ("camouflage", "camouflage")):
             items = [e for e in per_image if e["task"] == task and "embedding" in e]
             labels_present = sorted({e["label"] for e in items})
             if not items:
@@ -181,7 +181,7 @@ def write_markdown(r: dict) -> None:
         zs, fs = d["zero_shot"]["per_class_top1"], d["few_shot_loo"]["per_class_top1"]
         L.append(f"**{task}:** " + " · ".join(f"`{k}` {zs[k]} / {fs[k]}" for k in zs))
         L.append("")
-    missing = [k for k in ("weapon", "vehicle", "camouflage") if k not in r["identification"]]
+    missing = [k for k in ("weapon", "vehicle", "gear", "camouflage") if k not in r["identification"]]
     L += ["## What this does not measure", ""]
     if missing:
         L.append(f"- **Not measured yet: {', '.join(missing)}.** The eval set has no images for it; "
@@ -194,7 +194,7 @@ def write_markdown(r: dict) -> None:
           "whole image; see the *crop from detector* column.",
           "- **Hard negatives:** the negatives are everyday COCO scenes (people with bats, skis, rackets…); "
           "tractors, hunters or airsoft players were not tested.",
-          "- **Personnel / helmet thresholds** are untuned starting values; only weapon and vehicle thresholds were checked against the sweep above.",
+          "- **Personnel false alarms** are not measured: the negative images contain people, so a personnel detection there is correct.",
           "- **Box accuracy (IoU):** labels are image-level, not hand-drawn boxes.",
           "- **Face redaction recall:** the set has no face annotations. Always check the redacted image yourself.",
           "- **Attribution:** country ranking is a deterministic function of the identifications above and the",

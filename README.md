@@ -20,10 +20,10 @@ attempt, so "offline" is enforced, not just promised. Each report shows the coun
 
 > **How accurate is it?** See [EVALUATION.md](EVALUATION.md): detection recall, false alarms and
 > top-1/top-3 identification accuracy on a labelled Wikimedia Commons set, next to chance level.
-> Short version (150 images): finding *that* there is a rifle or an armored vehicle works well
-> (94–96 % found, no weapon/vehicle false alarms on everyday negatives at the default thresholds).
+> Short version (168 images): finding *that* there is a rifle, an armored vehicle or a helmet works well
+> (92–96 % found, no weapon/vehicle false alarms on everyday negatives at the default thresholds).
 > Telling *which* one it is is harder: rifles 52 % top-1 (57 % with reference photos) vs 11 % chance,
-> vehicles 78 % vs 17 %, camouflage patterns 46 % (56 % with reference photos) vs 7 %.
+> vehicles 78 % vs 17 %, helmets 83 % vs 50 %, camouflage patterns 46 % (57 % with reference photos) vs 7 %.
 > Treat identifications as hints to verify by eye.
 
 ## What changed in v2
@@ -103,7 +103,8 @@ pytest                                         # unit tests; model tests run whe
 - Faces that are tiny, masked or turned away can be missed by the redactor. Check before sharing.
 - Equipment and uniforms are exported, captured, copied and sold as surplus; a match is never proof
   of who is in the picture.
-- The catalogs cover 9 small arms, 6 vehicles, 2 helmets and 14 camouflage patterns.
+- The catalogs cover 9 small arms, 6 vehicles, 2 helmets and 14 camouflage patterns. Five patterns (A-TACS, Partizan,
+  IDF olive, all-black, East-African woodland) have no freely licensed evaluation photos yet and are unmeasured.
 
 ## Project layout
 

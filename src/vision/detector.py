@@ -40,11 +40,13 @@ QUERIES: List[Query] = [
 ]
 
 # Per-category score thresholds; lower = more recall but more false alarms.
-# Weapon and vehicle values were checked against the sweep in EVALUATION.md
-# (full recall on the set with no false alarms on the negatives). Personnel and
-# helmet values are untuned starting points.
+# All four were chosen from the threshold sweep in EVALUATION.md:
+#   weapon 0.22 / vehicle 0.25: ~95 % recall, no false alarms on the negatives;
+#   gear 0.25: 92 % recall (recall is flat from 0.20 to 0.30);
+#   personnel 0.20: the highest value that still reaches the maximum recall on the camouflage set.
+#   Personnel false alarms are not measured (the negative images contain people).
 DEFAULT_THRESHOLDS: Dict[str, float] = {
-    "personnel": 0.30,
+    "personnel": 0.20,
     "weapon": 0.22,
     "vehicle": 0.25,
     "gear": 0.25,

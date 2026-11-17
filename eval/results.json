@@ -1,5 +1,5 @@
 {
-  "images": 150,
+  "images": 168,
   "by_label": {
     "camo_cadpat_tw": 6,
     "camo_emr": 6,
@@ -8,7 +8,10 @@
     "camo_m90": 6,
     "camo_marpat_woodland": 6,
     "camo_multicam": 6,
+    "camo_turkish_digital": 6,
     "camo_type07": 6,
+    "gear_6b47_helmet": 6,
+    "gear_fast_helmet": 6,
     "negative": 12,
     "veh_bmp2": 6,
     "veh_bradley_m2a2": 6,
@@ -45,14 +48,23 @@
       "0.40": 0.8888888888888888,
       "n": 36
     },
+    "gear": {
+      "0.10": 1.0,
+      "0.15": 1.0,
+      "0.20": 0.9166666666666666,
+      "0.25": 0.9166666666666666,
+      "0.30": 0.9166666666666666,
+      "0.40": 0.6666666666666666,
+      "n": 12
+    },
     "camouflage": {
-      "0.10": 0.75,
-      "0.15": 0.75,
-      "0.20": 0.75,
-      "0.25": 0.6875,
-      "0.30": 0.6666666666666666,
-      "0.40": 0.4375,
-      "n": 48
+      "0.10": 0.7777777777777778,
+      "0.15": 0.7777777777777778,
+      "0.20": 0.7777777777777778,
+      "0.25": 0.7222222222222222,
+      "0.30": 0.6851851851851852,
+      "0.40": 0.4444444444444444,
+      "n": 54
     }
   },
   "false_alarm_on_negatives": {
@@ -71,6 +83,15 @@
       "0.20": 0.08333333333333333,
       "0.25": 0.0,
       "0.30": 0.0,
+      "0.40": 0.0,
+      "n": 12
+    },
+    "gear": {
+      "0.10": 0.08333333333333333,
+      "0.15": 0.08333333333333333,
+      "0.20": 0.08333333333333333,
+      "0.25": 0.08333333333333333,
+      "0.30": 0.08333333333333333,
       "0.40": 0.0,
       "n": 12
     }
@@ -146,15 +167,39 @@
       },
       "crops_from_detection": 0.9444444444444444
     },
+    "gear": {
+      "n": 12,
+      "classes_in_eval": 2,
+      "catalog_classes": 2,
+      "chance_top1": 0.5,
+      "chance_top3": 1,
+      "zero_shot": {
+        "top1": 0.8333333333333334,
+        "top3": 1.0,
+        "per_class_top1": {
+          "gear_6b47_helmet": "4/6",
+          "gear_fast_helmet": "6/6"
+        }
+      },
+      "few_shot_loo": {
+        "top1": 0.9166666666666666,
+        "top3": 1.0,
+        "per_class_top1": {
+          "gear_6b47_helmet": "5/6",
+          "gear_fast_helmet": "6/6"
+        }
+      },
+      "crops_from_detection": 0.9166666666666666
+    },
     "camouflage": {
-      "n": 48,
-      "classes_in_eval": 8,
+      "n": 54,
+      "classes_in_eval": 9,
       "catalog_classes": 14,
       "chance_top1": 0.07142857142857142,
       "chance_top3": 0.21428571428571427,
       "zero_shot": {
-        "top1": 0.4583333333333333,
-        "top3": 0.625,
+        "top1": 0.46296296296296297,
+        "top3": 0.5925925925925926,
         "per_class_top1": {
           "camo_cadpat_tw": "3/6",
           "camo_emr": "4/6",
@@ -163,12 +208,13 @@
           "camo_m90": "4/6",
           "camo_marpat_woodland": "3/6",
           "camo_multicam": "2/6",
+          "camo_turkish_digital": "3/6",
           "camo_type07": "2/6"
         }
       },
       "few_shot_loo": {
-        "top1": 0.5625,
-        "top3": 0.6875,
+        "top1": 0.5740740740740741,
+        "top3": 0.6851851851851852,
         "per_class_top1": {
           "camo_cadpat_tw": "2/6",
           "camo_emr": "4/6",
@@ -176,18 +222,19 @@
           "camo_m81_woodland": "2/6",
           "camo_m90": "4/6",
           "camo_marpat_woodland": "5/6",
-          "camo_multicam": "5/6",
-          "camo_type07": "2/6"
+          "camo_multicam": "4/6",
+          "camo_turkish_digital": "3/6",
+          "camo_type07": "4/6"
         }
       },
-      "crops_from_detection": 0.6666666666666666
+      "crops_from_detection": 0.7777777777777778
     }
   },
-  "seconds_per_image_median": 0.19,
+  "seconds_per_image_median": 0.17,
   "device": "cuda",
   "outbound_network_attempts": 0,
   "thresholds": {
-    "personnel": 0.3,
+    "personnel": 0.2,
     "weapon": 0.22,
     "vehicle": 0.25,
     "gear": 0.25

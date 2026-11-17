@@ -60,7 +60,11 @@ CLASSES = {
     "veh_t72b3": ("vehicle", ["T-72B3", "T-72B3 mod. 2011", "T-72B3 mod. 2016", "T-72B3 mod. 2014"]),
     "veh_toyota_hilux": ("vehicle", ["Technicals (vehicle)"]),
     # ---- camouflage on personnel ----
+    # ---- helmets ----
+    "gear_fast_helmet": ("gear", ["Ops-Core Helmet"]),
+    "gear_6b47_helmet": ("gear", ["6B47 helmet"]),
     "camo_multicam": ("camouflage", ["MultiCam", "Operational Camouflage Pattern"]),
+    "camo_turkish_digital": ("camouflage", ["Turkish nano camouflage pattern of the Turkish military", "Turkish nano camouflage pattern"]),
     "camo_emr": ("camouflage", ["EMR camouflage pattern of the Russian military", "EMR camouflage"]),
     "camo_marpat_woodland": ("camouflage", ["MARPAT", "Marine Corps Combat Utility Uniform"]),
     "camo_flecktarn": ("camouflage", ["Flecktarn"]),
