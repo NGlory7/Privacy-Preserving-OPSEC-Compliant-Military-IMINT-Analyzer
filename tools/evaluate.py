@@ -187,8 +187,11 @@ def write_markdown(r: dict) -> None:
         L.append(f"- **Not measured yet: {', '.join(missing)}.** The eval set has no images for it; "
                  "run `python tools/build_eval_set.py` (Wikimedia Commons rate-limits it heavily, so it can take hours) "
                  "and re-run this script.")
-    absent = {k: v for k, v in r["by_label"].items()}
-    L += [f"- **Catalog classes without eval images** are not covered by the numbers above (images per label: `{absent}`).",
+    absent = [cid for kind in ("weapon", "vehicle", "gear", "camouflage") for cid in clip_classifier.PROMPTS[kind]
+              if cid != clip_classifier.UNKNOWN and cid not in r["by_label"]]
+    L += [f"- **Catalog classes without eval images** (no free photos found on Commons): {', '.join(f'`{a}`' for a in absent)}.",
+          "- **Camouflage images without a detected person** (fabric swatches, uniforms on display) are classified on the "
+          "whole image; see the *crop from detector* column.",
           "- **Hard negatives:** the negatives are everyday COCO scenes (people with bats, skis, rackets…); "
           "tractors, hunters or airsoft players were not tested.",
           "- **Personnel / helmet thresholds** are untuned starting values; only weapon and vehicle thresholds were checked against the sweep above.",

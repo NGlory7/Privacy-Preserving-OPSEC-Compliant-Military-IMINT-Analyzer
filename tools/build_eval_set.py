@@ -11,7 +11,9 @@ resized locally to 960 px and stored in eval/images/<label>/ (git-ignored; re-ru
 Labels come from the Commons category the file is filed under. Category filing is
 done by volunteers and is occasionally wrong, so a few labels in the set may be noisy.
 The script is deliberately slow (one API call every few seconds) to respect
-Wikimedia's rate limits.
+Wikimedia's rate limits. Set COMMONS_CONTACT (a URL or e-mail) so requests carry
+contact info as Wikimedia's User-Agent policy asks; without it, downloads are
+throttled to a crawl.
 """
 
 from __future__ import annotations
@@ -31,7 +33,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "eval"
 API = "https://commons.wikimedia.org/w/api.php"
-UA = "eval-set-builder/1.0 (open-source research tool; python-urllib)"
+# Wikimedia's User-Agent policy asks for contact info; anonymous clients are throttled hard.
+# Set COMMONS_CONTACT to a URL or e-mail you are happy to share, e.g. your fork's GitHub URL.
+import os  # noqa: E402
+
+_contact = os.environ.get("COMMONS_CONTACT", "").strip()
+UA = f"AegisIMINT-eval-builder/1.0 ({_contact})" if _contact else "eval-set-builder/1.0 (open-source research tool; python-urllib)"
 ALLOWED = re.compile(r"^(public domain|pd|cc0|cc[ -]by(-sa)?[ -]?\d)", re.I)
 
 # label -> (task, catalog id, Commons categories to sample from)
@@ -43,15 +50,15 @@ CLASSES = {
     "wpn_pkm": ("weapon", ["PKM", "PK machine gun", "PKM machine gun", "PK machine guns"]),
     "wpn_ak12": ("weapon", ["AK-12"]),
     "wpn_m4a1": ("weapon", ["M4 carbine"]),
-    "wpn_hk416": ("weapon", ["HK416", "Heckler & Koch HK416", "HK416 rifles"]),
+    "wpn_hk416": ("weapon", ["Heckler & Koch HK416", "Hk416 in Lithuanian service"]),
     "wpn_mpt76": ("weapon", ["MPT-76"]),
-    "wpn_qbz95": ("weapon", ["QBZ-95", "QBZ-95 assault rifle", "Type 95 assault rifle", "QBZ-95 rifles"]),
+    "wpn_qbz95": ("weapon", ["Type 95 rifle"]),
     "veh_btr82a": ("vehicle", ["BTR-82A"]),
     "veh_bmp2": ("vehicle", ["BMP-2"]),
     "veh_bradley_m2a2": ("vehicle", ["M2 Bradley", "M2A2 Bradley"]),
     "veh_kirpi": ("vehicle", ["BMC Kirpi", "Kirpi"]),
-    "veh_t72b3": ("vehicle", ["T-72B3"]),
-    "veh_toyota_hilux": ("vehicle", ["Technicals (vehicles)", "Technicals"]),
+    "veh_t72b3": ("vehicle", ["T-72B3", "T-72B3 mod. 2011", "T-72B3 mod. 2016", "T-72B3 mod. 2014"]),
+    "veh_toyota_hilux": ("vehicle", ["Technicals (vehicle)"]),
     # ---- camouflage on personnel ----
     "camo_multicam": ("camouflage", ["MultiCam", "Operational Camouflage Pattern"]),
     "camo_emr": ("camouflage", ["EMR camouflage pattern of the Russian military", "EMR camouflage"]),
@@ -59,8 +66,9 @@ CLASSES = {
     "camo_flecktarn": ("camouflage", ["Flecktarn"]),
     "camo_cadpat_tw": ("camouflage", ["CADPAT", "CADPAT (TW)"]),
     "camo_m90": ("camouflage", ["M90 camouflage", "M90 (camouflage)"]),
-    "camo_m81_woodland": ("camouflage", ["M81 Woodland", "Woodland (camouflage)"]),
-    "camo_type07": ("camouflage", ["Type 07 camouflage", "Type 07 (camouflage)"]),
+    "camo_m81_woodland": ("camouflage", ["Woodland pattern"]),
+    "camo_type07": ("camouflage", ["Type 07 camouflage uniforms", "Type 07 Woodland camouflage", "Type 07 Universal camouflage",
+                                    "Type 07 Arid camouflage", "Type 07 Oceanic camouflage", "Type 07 Urban camouflage"]),
     # ---- negatives: no military content expected ----
 }
 

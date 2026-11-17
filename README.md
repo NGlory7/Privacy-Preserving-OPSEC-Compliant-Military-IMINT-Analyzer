@@ -19,9 +19,10 @@ attempt, so "offline" is enforced, not just promised. Each report shows the coun
 
 > **How accurate is it?** See [EVALUATION.md](EVALUATION.md): detection recall, false alarms and
 > top-1/top-3 identification accuracy on a labelled Wikimedia Commons set, next to chance level.
-> Short version: finding *that* there is a rifle or an armored vehicle works well (95–100 % on the set,
-> no false alarms on everyday negatives); telling *which* rifle it is is much harder (42 % top-1 zero-shot,
-> 55 % with reference photos, vs 11 % chance). Camouflage accuracy has **not been measured yet**.
+> Short version (150 images): finding *that* there is a rifle or an armored vehicle works well
+> (94–96 % found, no weapon/vehicle false alarms on everyday negatives at the default thresholds).
+> Telling *which* one it is is harder: rifles 52 % top-1 (57 % with reference photos) vs 11 % chance,
+> vehicles 78 % vs 17 %, camouflage patterns 46 % (56 % with reference photos) vs 7 %.
 > Treat identifications as hints to verify by eye.
 
 ## What changed in v2
@@ -88,7 +89,7 @@ flowchart LR
 ## Evaluating it yourself
 
 ```bash
-python tools/build_eval_set.py --per-class 6   # downloads freely licensed photos from Wikimedia Commons
+COMMONS_CONTACT=<your url or e-mail> python tools/build_eval_set.py   # freely licensed photos from Wikimedia Commons + COCO
 python tools/evaluate.py                       # writes EVALUATION.md and eval/results.json
 pytest                                         # unit tests; model tests run when weights are present
 ```

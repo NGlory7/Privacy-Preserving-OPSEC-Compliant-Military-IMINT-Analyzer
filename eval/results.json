@@ -1,37 +1,58 @@
 {
-  "images": 69,
+  "images": 150,
   "by_label": {
+    "camo_cadpat_tw": 6,
+    "camo_emr": 6,
+    "camo_flecktarn": 6,
+    "camo_m81_woodland": 6,
+    "camo_m90": 6,
+    "camo_marpat_woodland": 6,
+    "camo_multicam": 6,
+    "camo_type07": 6,
     "negative": 12,
     "veh_bmp2": 6,
     "veh_bradley_m2a2": 6,
     "veh_btr82a": 6,
-    "veh_kirpi": 1,
+    "veh_kirpi": 6,
+    "veh_t72b3": 6,
+    "veh_toyota_hilux": 6,
     "wpn_ak12": 6,
     "wpn_ak74m": 6,
     "wpn_akm": 6,
+    "wpn_hk416": 6,
     "wpn_m4a1": 6,
     "wpn_mpt76": 6,
-    "wpn_pkm": 2,
+    "wpn_pkm": 6,
+    "wpn_qbz95": 6,
     "wpn_rpg7": 6
   },
   "detection_recall": {
     "weapon": {
-      "0.10": 1.0,
-      "0.15": 1.0,
-      "0.20": 1.0,
-      "0.25": 0.9736842105263158,
-      "0.30": 0.9473684210526315,
-      "0.40": 0.868421052631579,
-      "n": 38
+      "0.10": 0.9814814814814815,
+      "0.15": 0.9814814814814815,
+      "0.20": 0.9629629629629629,
+      "0.25": 0.9444444444444444,
+      "0.30": 0.9259259259259259,
+      "0.40": 0.8518518518518519,
+      "n": 54
     },
     "vehicle": {
-      "0.10": 0.9473684210526315,
-      "0.15": 0.9473684210526315,
-      "0.20": 0.9473684210526315,
-      "0.25": 0.9473684210526315,
-      "0.30": 0.8421052631578947,
-      "0.40": 0.8421052631578947,
-      "n": 19
+      "0.10": 0.9722222222222222,
+      "0.15": 0.9722222222222222,
+      "0.20": 0.9722222222222222,
+      "0.25": 0.9444444444444444,
+      "0.30": 0.8888888888888888,
+      "0.40": 0.8888888888888888,
+      "n": 36
+    },
+    "camouflage": {
+      "0.10": 0.75,
+      "0.15": 0.75,
+      "0.20": 0.75,
+      "0.25": 0.6875,
+      "0.30": 0.6666666666666666,
+      "0.40": 0.4375,
+      "n": 48
     }
   },
   "false_alarm_on_negatives": {
@@ -56,69 +77,113 @@
   },
   "identification": {
     "weapon": {
-      "n": 38,
-      "classes_in_eval": 7,
+      "n": 54,
+      "classes_in_eval": 9,
       "catalog_classes": 9,
       "chance_top1": 0.1111111111111111,
       "chance_top3": 0.3333333333333333,
       "zero_shot": {
-        "top1": 0.42105263157894735,
-        "top3": 0.7105263157894737,
+        "top1": 0.5185185185185185,
+        "top3": 0.7777777777777778,
         "per_class_top1": {
           "wpn_ak12": "2/6",
           "wpn_ak74m": "3/6",
           "wpn_akm": "3/6",
+          "wpn_hk416": "4/6",
           "wpn_m4a1": "5/6",
           "wpn_mpt76": "1/6",
-          "wpn_pkm": "1/2",
+          "wpn_pkm": "4/6",
+          "wpn_qbz95": "5/6",
           "wpn_rpg7": "1/6"
         }
       },
       "few_shot_loo": {
-        "top1": 0.5526315789473685,
-        "top3": 0.8421052631578947,
+        "top1": 0.5740740740740741,
+        "top3": 0.9074074074074074,
         "per_class_top1": {
-          "wpn_ak12": "5/6",
+          "wpn_ak12": "3/6",
           "wpn_ak74m": "1/6",
           "wpn_akm": "4/6",
+          "wpn_hk416": "3/6",
           "wpn_m4a1": "3/6",
           "wpn_mpt76": "5/6",
-          "wpn_pkm": "0/2",
-          "wpn_rpg7": "3/6"
+          "wpn_pkm": "2/6",
+          "wpn_qbz95": "5/6",
+          "wpn_rpg7": "5/6"
         }
       },
-      "crops_from_detection": 1.0
+      "crops_from_detection": 0.9629629629629629
     },
     "vehicle": {
-      "n": 19,
-      "classes_in_eval": 4,
+      "n": 36,
+      "classes_in_eval": 6,
       "catalog_classes": 6,
       "chance_top1": 0.16666666666666666,
       "chance_top3": 0.5,
       "zero_shot": {
-        "top1": 0.7368421052631579,
-        "top3": 0.8947368421052632,
+        "top1": 0.7777777777777778,
+        "top3": 0.9444444444444444,
         "per_class_top1": {
           "veh_bmp2": "2/6",
           "veh_bradley_m2a2": "6/6",
           "veh_btr82a": "5/6",
-          "veh_kirpi": "1/1"
+          "veh_kirpi": "6/6",
+          "veh_t72b3": "4/6",
+          "veh_toyota_hilux": "5/6"
         }
       },
       "few_shot_loo": {
-        "top1": 0.7368421052631579,
-        "top3": 0.8947368421052632,
+        "top1": 0.7777777777777778,
+        "top3": 0.9444444444444444,
         "per_class_top1": {
-          "veh_bmp2": "3/6",
+          "veh_bmp2": "2/6",
           "veh_bradley_m2a2": "5/6",
           "veh_btr82a": "5/6",
-          "veh_kirpi": "1/1"
+          "veh_kirpi": "6/6",
+          "veh_t72b3": "4/6",
+          "veh_toyota_hilux": "6/6"
         }
       },
-      "crops_from_detection": 0.9473684210526315
+      "crops_from_detection": 0.9444444444444444
+    },
+    "camouflage": {
+      "n": 48,
+      "classes_in_eval": 8,
+      "catalog_classes": 14,
+      "chance_top1": 0.07142857142857142,
+      "chance_top3": 0.21428571428571427,
+      "zero_shot": {
+        "top1": 0.4583333333333333,
+        "top3": 0.625,
+        "per_class_top1": {
+          "camo_cadpat_tw": "3/6",
+          "camo_emr": "4/6",
+          "camo_flecktarn": "4/6",
+          "camo_m81_woodland": "0/6",
+          "camo_m90": "4/6",
+          "camo_marpat_woodland": "3/6",
+          "camo_multicam": "2/6",
+          "camo_type07": "2/6"
+        }
+      },
+      "few_shot_loo": {
+        "top1": 0.5625,
+        "top3": 0.6875,
+        "per_class_top1": {
+          "camo_cadpat_tw": "2/6",
+          "camo_emr": "4/6",
+          "camo_flecktarn": "3/6",
+          "camo_m81_woodland": "2/6",
+          "camo_m90": "4/6",
+          "camo_marpat_woodland": "5/6",
+          "camo_multicam": "5/6",
+          "camo_type07": "2/6"
+        }
+      },
+      "crops_from_detection": 0.6666666666666666
     }
   },
-  "seconds_per_image_median": 0.17,
+  "seconds_per_image_median": 0.19,
   "device": "cuda",
   "outbound_network_attempts": 0,
   "thresholds": {
