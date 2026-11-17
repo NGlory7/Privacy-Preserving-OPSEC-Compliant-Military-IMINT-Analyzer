@@ -58,3 +58,8 @@ output/
 temp/
 logs/
 *.log
+
+# Local model weights and evaluation images (rebuild with tools/)
+models/
+eval/images/
+eval_build.log

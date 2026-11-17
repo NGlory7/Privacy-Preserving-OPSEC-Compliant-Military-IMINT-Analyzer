@@ -3,7 +3,7 @@ Patch Extractor & Texture Normalizer
 Extracts, centers, and normalizes candidate fabric or equipment swatches from images.
 """
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import numpy as np
 from PIL import Image
 
@@ -11,9 +11,10 @@ class PatchExtractor:
     """Isolates and standardizes regions of interest (ROI) for classification."""
 
     @staticmethod
-    def crop_patch(image: Image.Image, box: Tuple[int, int, int, int], target_size: Tuple[int, int] = (256, 256)) -> Image.Image:
+    def crop_patch(image: Image.Image, box: Tuple[int, int, int, int], target_size: Optional[Tuple[int, int]] = (256, 256)) -> Image.Image:
         """
-        Crops (x, y, w, h) bounding box from image and resizes with anti-aliasing.
+        Crops an (x, y, w, h) box. Resizes with anti-aliasing unless target_size is None,
+        in which case the native aspect ratio is kept (better for the classifiers).
         """
         x, y, w, h = box
         img_w, img_h = image.size
@@ -25,6 +26,8 @@ class PatchExtractor:
         y2 = max(y1 + 1, min(y + h, img_h))
 
         crop = image.crop((x1, y1, x2, y2))
+        if target_size is None:
+            return crop
         return crop.resize(target_size, Image.Resampling.LANCZOS)
 
     @staticmethod

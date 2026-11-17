@@ -3,10 +3,14 @@ Metadata Sanitizer (Anti-Tracking & OPSEC Engine)
 Strips EXIF, GPS, camera serials, timestamps, and geolocation tags from uploaded imagery.
 """
 
-import io
 from typing import Dict, Any, Tuple
-from PIL import Image
+
+import numpy as np
+from PIL import Image, ImageOps
 from PIL.ExifTags import TAGS, GPSTAGS
+
+GPS_IFD = 0x8825
+EXIF_IFD = 0x8769
 
 class MetadataSanitizer:
     """Detects and scrubs embedded metadata from imagery."""
@@ -34,23 +38,24 @@ class MetadataSanitizer:
             leaks["has_exif"] = True
             leaks["raw_tags_count"] = len(exif_data)
 
-            for tag_id, value in exif_data.items():
+            # Base IFD + the Exif sub-IFD (where DateTimeOriginal, LensModel, serials live)
+            tags = dict(exif_data.items())
+            tags.update(exif_data.get_ifd(EXIF_IFD))
+            leaks["raw_tags_count"] = len(tags)
+
+            for tag_id, value in tags.items():
                 tag_name = TAGS.get(tag_id, str(tag_id))
-
-                if tag_name in ["Make", "Model", "Software", "LensModel", "BodySerialNumber"]:
+                if tag_name in ["Make", "Model", "Software", "LensModel", "BodySerialNumber", "CameraOwnerName"]:
                     leaks["device_info"][tag_name] = str(value)
-
-                elif tag_name in ["DateTime", "DateTimeOriginal", "DateTimeDigitized"]:
+                elif tag_name in ["DateTimeOriginal", "DateTime", "DateTimeDigitized"]:
                     if not leaks["timestamp"]:
                         leaks["timestamp"] = str(value)
 
-                elif tag_name == "GPSInfo":
-                    leaks["has_gps"] = True
-                    gps_dict = {}
-                    for gps_tag_id, gps_val in value.items():
-                        sub_tag = GPSTAGS.get(gps_tag_id, str(gps_tag_id))
-                        gps_dict[sub_tag] = str(gps_val)
-                    leaks["gps_info"] = gps_dict
+            # GPSInfo in the base IFD is only an offset; the tags live in their own IFD
+            gps = exif_data.get_ifd(GPS_IFD)
+            if gps:
+                leaks["has_gps"] = True
+                leaks["gps_info"] = {GPSTAGS.get(k, str(k)): str(v) for k, v in gps.items()}
 
         except Exception as e:
             leaks["extraction_error"] = str(e)
@@ -66,13 +71,17 @@ class MetadataSanitizer:
         """
         leaks = MetadataSanitizer.extract_metadata(image)
 
-        # Create new image with pure pixel data only
-        data = list(image.getdata())
-        sanitized_img = Image.new(image.mode, image.size)
-        sanitized_img.putdata(data)
+        # Apply the EXIF orientation first so the stripped image is not shown sideways,
+        # then rebuild the image from raw pixels only (no EXIF, XMP, ICC, comments).
+        oriented = ImageOps.exif_transpose(image)
+        if oriented.mode not in ("RGB", "RGBA", "L"):
+            oriented = oriented.convert("RGBA" if "A" in oriented.getbands() or "transparency" in oriented.info else "RGB")
+        sanitized_img = Image.fromarray(np.array(oriented))
 
         audit_log = {
             "opsec_status": "CLEARED",
+            "remaining_exif_tags": len(sanitized_img.getexif()),
+            "remaining_info_keys": sorted(sanitized_img.info.keys()),
             "stripped_tags": leaks["raw_tags_count"],
             "gps_eliminated": leaks["has_gps"],
             "device_fingerprint_cleared": len(leaks["device_info"]) > 0,

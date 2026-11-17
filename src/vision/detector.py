@@ -1,103 +1,130 @@
 """
-Local Vision & Equipment Detector
-Scans images locally to detect military personnel uniforms, weapons, combat vehicles, and gear.
-Generates localized bounding boxes and extracted regions of interest (ROI).
+Local military object detector.
+
+Uses OWLv2 (open-vocabulary detection, runs fully on this machine) with text queries
+for personnel, small arms, vehicles and helmets. Every box comes from the model;
+nothing is placed at fixed image positions. If nothing passes the threshold,
+the detector returns zero detections and says so.
 """
 
-from typing import List, Dict, Any, Tuple
-import numpy as np
-from PIL import Image
+from __future__ import annotations
 
-try:
-    import cv2
-    OPENCV_AVAILABLE = True
-except ImportError:
-    cv2 = None
-    OPENCV_AVAILABLE = False
+from dataclasses import dataclass
+from typing import Any, Dict, List
+
+from PIL import Image
 
 from src.vision.patch_extractor import PatchExtractor
 
 
-class LocalMilitaryDetector:
-    """Detects tactical objects and uniform regions locally."""
+@dataclass(frozen=True)
+class Query:
+    text: str
+    class_name: str
+    label: str
+    category: str  # personnel | weapon | vehicle | gear
 
-    def __init__(self, confidence_threshold: float = 0.5):
-        self.confidence_threshold = confidence_threshold
+
+QUERIES: List[Query] = [
+    Query("a photo of a soldier", "soldier", "Personnel", "personnel"),
+    Query("a photo of a person", "soldier", "Personnel", "personnel"),
+    Query("a photo of a rifle", "small_arms", "Rifle / carbine", "weapon"),
+    Query("a photo of an assault rifle", "small_arms", "Rifle / carbine", "weapon"),
+    Query("a photo of a machine gun", "machine_gun", "Machine gun", "weapon"),
+    Query("a photo of a rocket-propelled grenade launcher", "rocket_launcher", "Rocket launcher", "weapon"),
+    Query("a photo of a tank", "tank", "Tank", "vehicle"),
+    Query("a photo of an armored personnel carrier", "armored_vehicle", "Armored vehicle", "vehicle"),
+    Query("a photo of an armored fighting vehicle", "armored_vehicle", "Armored vehicle", "vehicle"),
+    Query("a photo of a pickup truck", "pickup_truck", "Pickup truck", "vehicle"),
+    Query("a photo of a military helmet", "helmet", "Helmet", "gear"),
+]
+
+# Per-category score thresholds; lower = more recall but more false alarms.
+# Weapon and vehicle values were checked against the sweep in EVALUATION.md
+# (full recall on the set with no false alarms on the negatives). Personnel and
+# helmet values are untuned starting points.
+DEFAULT_THRESHOLDS: Dict[str, float] = {
+    "personnel": 0.30,
+    "weapon": 0.22,
+    "vehicle": 0.25,
+    "gear": 0.25,
+}
+
+CATEGORIES = ("personnel", "weapon", "vehicle", "gear")
+
+
+class LocalMilitaryDetector:
+    """Detects personnel, weapons, vehicles and helmets with OWLv2, locally."""
+
+    def __init__(self, thresholds: Dict[str, float] | None = None, max_per_category: int = 8):
+        self.thresholds = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
+        self.max_per_category = max_per_category
+
+    def raw_scores(self, image: Image.Image):
+        """Runs OWLv2 once. Returns (boxes[N,4] xyxy, scores[N], query_index[N]) above a low floor."""
+        import torch
+
+        from src.models import device, load_owl
+
+        processor, model = load_owl()
+        rgb = image.convert("RGB")
+        img_w, img_h = rgb.size
+
+        inputs = processor(text=[[q.text for q in QUERIES]], images=rgb, return_tensors="pt")
+        inputs = {k: v.to(device()) for k, v in inputs.items()}
+        inputs["pixel_values"] = inputs["pixel_values"].to(model.dtype)
+        with torch.inference_mode():
+            outputs = model(**inputs)
+
+        # OWLv2 pads the image to a square (bottom/right), so boxes are scaled to the
+        # padded side; they then line up with the original pixel coordinates.
+        side = max(img_w, img_h)
+        post = getattr(processor, "post_process_object_detection", None) or processor.post_process_grounded_object_detection
+        result = post(outputs=outputs, threshold=0.05, target_sizes=torch.tensor([[side, side]]))[0]
+        return result["boxes"].float().cpu(), result["scores"].float().cpu(), result["labels"].cpu()
 
     def analyze_image(self, image: Image.Image) -> Dict[str, Any]:
-        """
-        Runs complete local CV scanning on the image.
-        Returns detected military entities, bounding boxes, and cropped patches.
-        """
-        img_w, img_h = image.size
-        img_np = np.array(image.convert("RGB"))
+        from torchvision.ops import nms
+
+        rgb = image.convert("RGB")
+        img_w, img_h = rgb.size
+        boxes, scores, labels = self.raw_scores(rgb)
 
         detections: List[Dict[str, Any]] = []
+        for category in CATEGORIES:
+            idx = [
+                i for i, lab in enumerate(labels.tolist())
+                if QUERIES[lab].category == category and scores[i] >= self.thresholds[category]
+            ]
+            if not idx:
+                continue
+            cat_boxes, cat_scores = boxes[idx], scores[idx]
+            keep = nms(cat_boxes, cat_scores, iou_threshold=0.5)[: self.max_per_category]
+            for k in keep.tolist():
+                x1, y1, x2, y2 = cat_boxes[k].tolist()
+                x1, y1 = max(0.0, x1), max(0.0, y1)
+                x2, y2 = min(float(img_w), x2), min(float(img_h), y2)
+                if x2 - x1 < 4 or y2 - y1 < 4:
+                    continue
+                q = QUERIES[labels[idx[k]].item()]
+                box = (int(x1), int(y1), int(x2 - x1), int(y2 - y1))
+                n = sum(1 for d in detections if d["category"] == category) + 1
+                detections.append({
+                    "id": f"det_{category}_{n:02d}",
+                    "class_name": q.class_name,
+                    "label": q.label,
+                    "query": q.text,
+                    "confidence": round(float(cat_scores[k]), 3),
+                    "box": box,
+                    "crop": PatchExtractor.crop_patch(rgb, box, target_size=None),
+                    "category": category,
+                })
 
-        # 1. Uniform / Camouflage Fabric Detection (Torso / Chest ROI)
-        # Typically occupies middle 30-70% height and 25-75% width in personnel imagery
-        camo_box = (
-            int(img_w * 0.25),
-            int(img_h * 0.28),
-            int(img_w * 0.50),
-            int(img_h * 0.45)
-        )
-        camo_crop = PatchExtractor.crop_patch(image, camo_box)
-        detections.append({
-            "id": "det_camo_01",
-            "class_name": "camouflage_uniform",
-            "label": "Camouflage Uniform Region",
-            "confidence": 0.91,
-            "box": camo_box,
-            "crop": camo_crop,
-            "category": "uniform"
-        })
-
-        # 2. Weapon / Equipment Region Detection (Using Edge Density & Linear Contours)
-        weapon_box = self._detect_linear_equipment_box(img_np, img_w, img_h)
-        if weapon_box:
-            weapon_crop = PatchExtractor.crop_patch(image, weapon_box)
-            detections.append({
-                "id": "det_wpn_01",
-                "class_name": "small_arms",
-                "label": "Suspected Small Arms / Weapon Profile",
-                "confidence": 0.78,
-                "box": weapon_box,
-                "crop": weapon_crop,
-                "category": "weapon"
-            })
-
-        # 3. Headgear / Tactical Helmet Region (Top Center ROI)
-        helmet_box = (
-            int(img_w * 0.35),
-            int(img_h * 0.08),
-            int(img_w * 0.30),
-            int(img_h * 0.22)
-        )
-        helmet_crop = PatchExtractor.crop_patch(image, helmet_box)
-        detections.append({
-            "id": "det_gear_01",
-            "class_name": "tactical_helmet",
-            "label": "Tactical Headgear / Helmet",
-            "confidence": 0.82,
-            "box": helmet_box,
-            "crop": helmet_crop,
-            "category": "gear"
-        })
-
+        detections.sort(key=lambda d: d["confidence"], reverse=True)
         return {
             "image_dimensions": {"width": img_w, "height": img_h},
             "detections_count": len(detections),
-            "detections": detections
+            "detections": detections,
+            "model": "OWLv2 (google/owlv2-base-patch16-ensemble)",
+            "thresholds": dict(self.thresholds),
         }
-
-    def _detect_linear_equipment_box(self, img_np: np.ndarray, w: int, h: int) -> Tuple[int, int, int, int]:
-        """
-        Locates elongated diagonal/horizontal structures characteristic of firearm profiles.
-        """
-        # Lower-third diagonal sweep (standard tactical carry position: low-ready or slung)
-        bw = int(w * 0.55)
-        bh = int(h * 0.25)
-        bx = int(w * 0.22)
-        by = int(h * 0.55)
-        return (bx, by, bw, bh)

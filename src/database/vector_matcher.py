@@ -1,74 +1,57 @@
 """
-Vector & Texture Similarity Matcher
-Computes normalized color histograms, spatial texture moments, and Euclidean / Cosine distances
-to match visual crops against reference camouflage databases offline.
+Camouflage matcher.
+
+Classifies a personnel crop against the camouflage catalog with CLIP
+(zero-shot prompts + optional reference photos, see src/vision/clip_classifier.py).
+The colour palette of the crop is still extracted, but only for display: colour
+alone cannot tell MultiCam from M81 and is not used for the decision.
 """
 
-from typing import List, Dict, Any, Tuple
+from typing import Any, Dict, List
+
 import numpy as np
 from PIL import Image
-from src.database.camouflage_db import CAMOUFLAGE_CATALOG
+
+from src.database.camouflage_db import CamouflageDatabase
+from src.vision import clip_classifier
+
 
 class VectorMatcher:
-    """Matches visual patches to catalog items using color-space and texture signatures."""
+    """Matches personnel crops to catalog camouflage patterns."""
 
     @staticmethod
-    def extract_color_palette(image: Image.Image, num_colors: int = 5) -> np.ndarray:
-        """
-        Extracts dominant RGB color centers from an image patch.
-        Uses K-Means or quantize method for fast, deterministic color clustering.
-        """
-        img_rgb = image.convert("RGB").resize((120, 120))
-        # Quantize to reduce color space
-        quantized = img_rgb.quantize(colors=num_colors, method=Image.Quantize.MEDIANCUT)
-        palette = quantized.getpalette()[:num_colors * 3]
-        rgb_centers = [palette[i:i+3] for i in range(0, len(palette), 3)]
-        return np.array(rgb_centers, dtype=np.float32)
-
-    @staticmethod
-    def _color_distance(rgb_a: np.ndarray, rgb_b: np.ndarray) -> float:
-        """Computes minimum pairwise Euclidean distance between two color palettes."""
-        distances = []
-        for color_a in rgb_a:
-            min_dist = min(np.linalg.norm(color_a - color_b) for color_b in rgb_b)
-            distances.append(min_dist)
-        return float(np.mean(distances))
+    def extract_color_palette(image: Image.Image, num_colors: int = 5) -> List[str]:
+        """Dominant colours of the crop as hex strings (display only)."""
+        img = image.convert("RGB").resize((120, 120))
+        quantized = img.quantize(colors=num_colors, method=Image.Quantize.MEDIANCUT)
+        palette = quantized.getpalette()[: num_colors * 3]
+        rgb = np.array(palette, dtype=int).reshape(-1, 3)
+        return ["#%02x%02x%02x" % tuple(c) for c in rgb]
 
     @classmethod
     def match_camouflage(cls, patch: Image.Image, top_k: int = 3) -> List[Dict[str, Any]]:
         """
-        Compares an image crop against all reference patterns in the camouflage catalog.
-        Returns top_k matches sorted by similarity score (0.0 to 1.0).
+        Returns up to top_k catalog matches with a probability in percent.
+        "unknown" results are dropped; an empty list means the classifier abstained.
         """
-        query_palette = cls.extract_color_palette(patch, num_colors=5)
-        scores: List[Tuple[float, Dict[str, Any]]] = []
-
-        # Max theoretical distance in RGB space is sqrt(255^2 * 3) ~ 441.67
-        max_dist = 441.67
-
-        for entry in CAMOUFLAGE_CATALOG:
-            ref_rgb = np.array(entry["rgb_palette"], dtype=np.float32)
-            dist = cls._color_distance(query_palette, ref_rgb)
-
-            # Convert distance to normalized similarity score (0 to 1)
-            similarity = max(0.0, 1.0 - (dist / (max_dist * 0.45)))
-            scores.append((similarity, entry))
-
-        # Sort descending by similarity
-        scores.sort(key=lambda x: x[0], reverse=True)
-
+        palette = cls.extract_color_palette(patch)
         results = []
-        for sim, entry in scores[:top_k]:
+        for r in clip_classifier.classify(patch, "camouflage", top_k=top_k + 1):
+            if r["id"] == clip_classifier.UNKNOWN:
+                continue
+            entry = CamouflageDatabase.get_by_id(r["id"])
+            if not entry:
+                continue
             results.append({
                 "id": entry["id"],
                 "name": entry["name"],
                 "origin_country": entry["origin_country"],
                 "pattern_type": entry["pattern_type"],
-                "confidence": round(float(sim * 100), 1),
+                "confidence": round(r["probability"] * 100, 1),
                 "primary_operators": entry["primary_operators"],
                 "theaters_of_operation": entry["theaters_of_operation"],
                 "description": entry["description"],
-                "palette_hex": entry["palette_hex"]
+                "palette_hex": entry["palette_hex"],
+                "crop_palette_hex": palette,
             })
-
-        return results
+        return results[:top_k]

@@ -1,118 +1,106 @@
 """
-Joint Correlation & Probability Matrix Engine
-Synthesizes detected camouflage patterns, small arms, combat vehicles, and gear
-to statistically compute the most probable operator nations, military branches, and operational theaters.
+Attribution engine.
+
+Combines the identifications that the models actually produced (camouflage, weapon,
+vehicle, helmet) into a ranking of candidate operator countries.
+
+How it works, plainly:
+  score(country) = Σ  kind_weight × model_probability × operator_weight
+over every identification above ``min_probability``. ``operator_weight`` values are
+hand-assigned in the catalogs (they are expert priors, not learned). The output is a
+*relative evidence share*, not a calibrated probability, and the engine reports
+"inconclusive" when there is too little evidence or no clear leader.
+Nothing is inferred from defaults: if the models saw no weapon, no weapon is used.
 """
 
-from typing import List, Dict, Any
 from collections import defaultdict
-from src.database.military_hardware_db import HARDWARE_CATALOG
+from typing import Any, Dict, List, Optional
+
+from src.database.camouflage_db import CamouflageDatabase
+from src.database.military_hardware_db import MilitaryHardwareDatabase
+
+# How much one identification of each kind counts relative to the others.
+KIND_WEIGHTS = {"vehicle": 2.0, "camouflage": 1.5, "weapon": 1.4, "gear": 1.1}
+
+
+def _operators(kind: str, item_id: str) -> tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
+    if kind == "camouflage":
+        entry = CamouflageDatabase.get_by_id(item_id)
+        if not entry:
+            return None, []
+        return entry, [{"country": o["country"], "weight": o["weight"], "detail": o["branch"]}
+                       for o in entry.get("primary_operators", [])]
+    entry = MilitaryHardwareDatabase.find_hardware_by_id(item_id)
+    if not entry:
+        return None, []
+    return entry, [{"country": u["country"], "weight": u["weight"], "detail": u.get("units", "")}
+                   for u in entry.get("primary_users", [])]
+
 
 class CorrelationEngine:
-    """Computes cross-asset intelligence correlation matrix."""
-
     @classmethod
     def correlate(
         cls,
-        camo_matches: List[Dict[str, Any]],
-        detected_weapon_id: str = None,
-        detected_vehicle_id: str = None,
-        detected_gear_id: str = None
+        evidence: List[Dict[str, Any]],
+        min_probability: float = 0.35,
+        min_lead_ratio: float = 1.25,
     ) -> Dict[str, Any]:
         """
-        Calculates joint probability across all detected assets.
-        Returns ranked candidate nations, unit types, and theaters of operation.
+        evidence: [{"kind": "camouflage"|"weapon"|"vehicle"|"gear", "id": catalog_id,
+                    "probability": 0-1, "source": "model"|"analyst"}]
         """
-        nation_scores = defaultdict(float)
-        evidence_breakdown = defaultdict(list)
-        theater_frequencies = defaultdict(float)
+        nation_scores: Dict[str, float] = defaultdict(float)
+        reasons: Dict[str, List[str]] = defaultdict(list)
+        theaters: Dict[str, float] = defaultdict(float)
+        used, ignored = [], []
 
-        # 1. Incorporate Camouflage Evidence
-        top_camo = camo_matches[0] if camo_matches else None
-        if top_camo:
-            camo_conf = top_camo["confidence"] / 100.0
-            for op in top_camo.get("primary_operators", []):
-                country = op["country"]
-                score_increment = op["weight"] * camo_conf * 1.5
-                nation_scores[country] += score_increment
-                evidence_breakdown[country].append(
-                    f"Camouflage match: {top_camo['name']} ({op['branch']})"
-                )
+        for ev in evidence:
+            prob = float(ev.get("probability", 0))
+            if prob < min_probability:
+                ignored.append({**ev, "reason": f"probability {prob:.2f} < {min_probability}"})
+                continue
+            entry, ops = _operators(ev["kind"], ev["id"])
+            if not entry:
+                ignored.append({**ev, "reason": "unknown catalog id"})
+                continue
+            used.append({**ev, "name": entry["name"]})
+            w = KIND_WEIGHTS[ev["kind"]] * prob
+            for op in ops:
+                nation_scores[op["country"]] += w * op["weight"]
+                origin = "analyst override" if ev.get("source") == "analyst" else f"model p={prob:.2f}"
+                reasons[op["country"]].append(f"{ev['kind']}: {entry['name']} — {op['detail']} ({origin})")
+            for th in entry.get("theaters_of_operation", []):
+                theaters[th] += w
 
-            for th in top_camo.get("theaters_of_operation", []):
-                theater_frequencies[th] += 1.2
-
-        # 2. Incorporate Weapon Evidence
-        if detected_weapon_id:
-            for wpn in HARDWARE_CATALOG["weapons"]:
-                if wpn["id"] == detected_weapon_id:
-                    for user in wpn["primary_users"]:
-                        country = user["country"]
-                        score_increment = user["weight"] * 1.4
-                        nation_scores[country] += score_increment
-                        evidence_breakdown[country].append(
-                            f"Small arms correlation: {wpn['name']} ({user['units']})"
-                        )
-                    break
-
-        # 3. Incorporate Vehicle Evidence
-        if detected_vehicle_id:
-            for veh in HARDWARE_CATALOG["vehicles"]:
-                if veh["id"] == detected_vehicle_id:
-                    for user in veh["primary_users"]:
-                        country = user["country"]
-                        score_increment = user["weight"] * 2.0  # Heavy armor is high-confidence discriminator
-                        nation_scores[country] += score_increment
-                        evidence_breakdown[country].append(
-                            f"Combat vehicle match: {veh['name']} ({user['units']})"
-                        )
-                    break
-
-        # 4. Incorporate Tactical Gear Evidence
-        if detected_gear_id:
-            for gear in HARDWARE_CATALOG["tactical_gear"]:
-                if gear["id"] == detected_gear_id:
-                    for user in gear["primary_users"]:
-                        country = user["country"]
-                        score_increment = user["weight"] * 1.1
-                        nation_scores[country] += score_increment
-                        evidence_breakdown[country].append(
-                            f"Tactical gear alignment: {gear['name']} ({user['units']})"
-                        )
-                    break
-
-        # Normalize Scores to Percentages
-        total_score = sum(nation_scores.values()) or 1.0
-        ranked_nations = []
-        for country, raw_score in sorted(nation_scores.items(), key=lambda x: x[1], reverse=True):
-            pct = round((raw_score / total_score) * 100, 1)
-            ranked_nations.append({
+        total = sum(nation_scores.values())
+        ranked = []
+        for country, raw in sorted(nation_scores.items(), key=lambda x: x[1], reverse=True):
+            share = round(raw / total * 100, 1) if total else 0.0
+            ranked.append({
                 "country": country,
-                "probability_percentage": pct,
-                "raw_score": round(raw_score, 2),
-                "supporting_evidence": evidence_breakdown[country]
+                "evidence_share_percentage": share,
+                "probability_percentage": share,  # kept for older callers
+                "raw_score": round(raw, 3),
+                "supporting_evidence": reasons[country],
             })
 
-        # Rank Theaters
-        ranked_theaters = sorted(theater_frequencies.items(), key=lambda x: x[1], reverse=True)
-        theaters_list = [th[0] for th in ranked_theaters[:3]] or ["Global / Unspecified Deployment Theater"]
+        # The leader must outweigh the runner-up by a clear factor, otherwise we don't pick one
+        lead_ratio = (ranked[0]["raw_score"] / ranked[1]["raw_score"]) if len(ranked) > 1 and ranked[1]["raw_score"] else float("inf")
+        inconclusive = not used or lead_ratio < min_lead_ratio
 
-        top_candidate = ranked_nations[0] if ranked_nations else {
-            "country": "Inconclusive / Mixed Paramilitary Signature",
-            "probability_percentage": 0.0,
-            "supporting_evidence": ["Insufficient correlation threshold reached"]
-        }
-
+        top = ranked[0] if ranked and not inconclusive else None
         return {
-            "top_candidate_nation": top_candidate["country"],
-            "top_confidence_percentage": top_candidate["probability_percentage"],
-            "all_ranked_nations": ranked_nations[:5],
-            "suspected_theaters": theaters_list,
-            "correlation_matrix_status": "COMPUTED_LOCALLY",
-            "assets_evaluated": {
-                "camouflage": top_camo["name"] if top_camo else "None",
-                "weapon": detected_weapon_id or "Auto-inferred from visual silhouette",
-                "vehicle": detected_vehicle_id or "Not detected in primary frame",
-                "gear": detected_gear_id or "Standard tactical helmet"
-            }
+            "inconclusive": inconclusive,
+            "inconclusive_reason": (
+                "No identification passed the probability threshold." if not used
+                else f"Leader outweighs the runner-up only {lead_ratio:.2f}x (needs {min_lead_ratio}x)." if inconclusive
+                else None
+            ),
+            "top_candidate_nation": top["country"] if top else "Inconclusive",
+            "top_confidence_percentage": top["evidence_share_percentage"] if top else 0.0,
+            "all_ranked_nations": ranked[:5],
+            "suspected_theaters": [t for t, _ in sorted(theaters.items(), key=lambda x: x[1], reverse=True)[:3]],
+            "evidence_used": used,
+            "evidence_ignored": ignored,
+            "method": "weighted evidence share (hand-set catalog weights × model probabilities); not a calibrated probability",
         }

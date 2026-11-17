@@ -1,96 +1,75 @@
 """
-Intelligence Dossier & SITREP Generator
-Compiles visual detections, OPSEC audit records, and statistical correlations into a standardized
-Military Intelligence Assessment Report (IMINT / OSINT Dossier) 100% locally and offline.
+Markdown report generator. Reports only what the pipeline actually measured,
+including the uncertainties, the evidence that was ignored and the limitations.
 """
 
-import os
 import datetime
-from typing import Dict, Any, Optional
+from typing import Any, Dict
+
+
+def _p(x: float) -> str:
+    return f"{x * 100:.0f}%"
+
 
 class IntelligenceReporter:
-    """Produces tactical military dossiers locally with zero external network dependencies."""
-
     @classmethod
-    def generate_dossier(
-        cls,
-        opsec_manifest: Dict[str, Any],
-        camo_matches: list,
-        correlation_result: Dict[str, Any],
-        custom_notes: str = ""
-    ) -> Dict[str, Any]:
-        """
-        Synthesizes complete intelligence assessment offline.
-        Returns: {
-            "dossier_id": str,
-            "timestamp": str,
-            "markdown_report": str,
-            "structured_data": dict
-        }
-        """
-        now_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        dossier_id = f"IMINT-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    def generate_dossier(cls, result: Dict[str, Any], custom_notes: str = "") -> Dict[str, Any]:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        dossier_id = f"IMINT-{now.strftime('%Y%m%d-%H%M%S')}"
+        man = result["opsec_manifest"]
+        meta = man["metadata_sanitized"]
+        faces = man["biometric_sanitized"]
+        det = result["detection"]
+        corr = result["correlation"]
 
-        top_camo = camo_matches[0] if camo_matches else {"name": "Unclassified", "confidence": 0.0}
-        top_nation = correlation_result.get("top_candidate_nation", "Inconclusive")
-        top_conf = correlation_result.get("top_confidence_percentage", 0.0)
-        theaters = ", ".join(correlation_result.get("suspected_theaters", ["Indeterminate"]))
+        L = [
+            "# Imagery Assessment Report",
+            f"**ID:** `{dossier_id}` · **Generated:** {now.strftime('%Y-%m-%d %H:%M UTC')} · **Tool:** AegisIMINT (local models)",
+            "",
+            "> Automated output from open-vocabulary detection (OWLv2) and image-text matching (CLIP).",
+            "> Identifications can be wrong; verify every item visually before relying on it.",
+            "",
+            "## 1. Sanitization",
+            f"- Metadata tags removed: **{meta['stripped_tags']}** · GPS present in original: **{meta['gps_eliminated']}** · "
+            f"EXIF tags remaining: **{meta['remaining_exif_tags']}**",
+            f"- Faces redacted: **{faces.get('faces_detected', 0)}** (detector: `{faces.get('detector_backend')}`). "
+            "Small, occluded or turned-away faces may be missed.",
+            f"- Outbound network attempts during analysis: **{result['network']['outbound_attempts_blocked']}** (blocked by network guard)",
+            "",
+            "## 2. Detections",
+            f"Model: {det['model']} · thresholds: `{det['thresholds']}`",
+            "",
+        ]
+        if not det["detections"]:
+            L.append("_No object passed the detection thresholds._")
+        else:
+            L += ["| # | Category | Detector score | Box (x, y, w, h) | Best identification |", "|---|---|---|---|---|"]
+            for i, d in enumerate(det["detections"], 1):
+                ident = d.get("identification") or []
+                best = "; ".join(f"{x['name']} ({_p(x['probability'])})" for x in ident[:2]) or "—"
+                L.append(f"| {i} | {d['label']} | {d['confidence']:.2f} | {d['box']} | {best} |")
 
-        # Format standardized Military IMINT Markdown Report
-        report_md = f"""# 🛡️ DEFENSIVE OSINT / IMINT ASSESSMENT REPORT
-**DOSSIER ID:** `{dossier_id}` | **CLASSIFICATION:** UNCLASSIFIED // OSINT OPEN VERIFICATION  
-**TIMESTAMP:** `{now_utc}` | **ANALYZER:** AegisIMINT Engine (Air-Gapped Local)
-
----
-
-### 1. OPSEC & PRIVACY SANITIZATION AUDIT
-* **Privacy Status:** ✅ `OPSEC-CERTIFIED (Data Minimization Verified)`
-* **EXIF / Metadata Leaks Stripped:** `{opsec_manifest.get('metadata_sanitized', {}).get('stripped_tags', 0)} tags purged`
-* **GPS Coordinates Eliminated:** `{opsec_manifest.get('metadata_sanitized', {}).get('gps_eliminated', False)}`
-* **Biometric Identity Masking:** `{opsec_manifest.get('biometric_sanitized', {}).get('faces_detected', 0)} facial signatures redacted via Tactical Mosaic`
-* **Data Transmission Risk:** `ZERO (100% Offline / No outbound traffic)`
-
----
-
-### 2. PRIMARY ASSET IDENTIFICATION
-* **Dominant Camouflage Pattern:** **{top_camo.get('name', 'N/A')}**
-  * *Pattern Confidence:* **{top_camo.get('confidence', 0)}%**
-  * *Origin Country:* {top_camo.get('origin_country', 'N/A')}
-  * *Design Type:* {top_camo.get('pattern_type', 'N/A')}
-* **Small Arms Signature:** {correlation_result.get('assets_evaluated', {}).get('weapon', 'Inferred')}
-* **Combat Vehicle Profile:** {correlation_result.get('assets_evaluated', {}).get('vehicle', 'None')}
-
----
-
-### 3. JOINT CORRELATION & ATTRIBUTION MATRIX
-* **Highest Probability Operator Nation:** 🎯 **{top_nation}** (Confidence: **{top_conf}%**)
-* **Likely Operational Theaters:** 📍 *{theaters}*
-
-#### Attribution Probability Distribution:
-"""
-        for nation_data in correlation_result.get("all_ranked_nations", []):
-            pct = nation_data['probability_percentage']
-            bar = "█" * int(pct // 5) + "░" * (20 - int(pct // 5))
-            report_md += f"* **{nation_data['country']}** `[{bar}]` **{pct}%**\n"
-            for ev in nation_data.get("supporting_evidence", []):
-                report_md += f"  * *Rationale:* {ev}\n"
+        L += ["", "## 3. Attribution", f"_Method: {corr['method']}._", ""]
+        if corr["inconclusive"]:
+            L.append(f"**Inconclusive.** {corr['inconclusive_reason']}")
+        else:
+            L.append(f"Leading candidate: **{corr['top_candidate_nation']}** with **{corr['top_confidence_percentage']}%** of the evidence weight.")
+        if corr["all_ranked_nations"]:
+            L += ["", "| Country | Evidence share | Based on |", "|---|---|---|"]
+            for n in corr["all_ranked_nations"]:
+                L.append(f"| {n['country']} | {n['evidence_share_percentage']}% | {'<br>'.join(n['supporting_evidence'])} |")
+        if corr["evidence_ignored"]:
+            L += ["", "Evidence below threshold (not used):"]
+            L += [f"- {e['kind']} `{e['id']}`: {e['reason']}" for e in corr["evidence_ignored"]]
+        if corr["suspected_theaters"]:
+            L += ["", "Theaters associated with the used evidence: " + ", ".join(corr["suspected_theaters"])]
 
         if custom_notes:
-            report_md += f"""
----
+            L += ["", "## 4. Analyst notes", f"> {custom_notes}"]
 
-### 4. ANALYST FIELD OBSERVATIONS
-> {custom_notes}
-"""
+        L += ["", "---",
+              "_For research, journalism and education. Equipment and uniforms circulate widely (captured, exported, "
+              "imitated); a match is an indicator, never proof of who is in the picture._"]
 
-        report_md += """
----
-*DISCLAIMER: This automated report is generated strictly from open-source visual data points using local Bayesian matrix correlation. Findings represent statistical likelihood indicators for verification purposes.*
-"""
-
-        return {
-            "dossier_id": dossier_id,
-            "timestamp": now_utc,
-            "markdown_report": report_md,
-            "structured_data": correlation_result
-        }
+        return {"dossier_id": dossier_id, "timestamp": now.isoformat(), "markdown_report": "\n".join(L),
+                "structured_data": corr}

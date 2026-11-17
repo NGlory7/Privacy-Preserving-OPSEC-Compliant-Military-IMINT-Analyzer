@@ -30,7 +30,9 @@ class TacticalVisualizer:
         for det in detections:
             x, y, w, h = det["box"]
             cat = det.get("category", "")
-            label = f"{det['label']} [{int(det['confidence'] * 100)}%]"
+            ident = (det.get("identification") or [{}])[0]
+            name = ident.get("name", "").split(" / ")[0] if ident.get("id") not in (None, "unknown") else ""
+            label = f"{det['label']} {det['confidence']:.2f}" + (f" | {name} {ident['probability']:.2f}" if name else "")
 
             if cat == "weapon":
                 color = cls.COLOR_WEAPON
@@ -58,9 +60,13 @@ class TacticalVisualizer:
             draw.line([(x + w, y + h), (x + w - corner_len, y + h)], fill=color, width=th)
             draw.line([(x + w, y + h), (x + w, y + h - corner_len)], fill=color, width=th)
 
-            # Label banner
+            # Thin full outline so the extent is clear, then the corner brackets on top
+            draw.rectangle([(x, y), (x + w, y + h)], outline=color, width=1)
+
+            # Label banner (kept inside the image when the box touches the top edge)
             bbox = font.getbbox(label)
             text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            y = max(y, text_h + 6)
             draw.rectangle([(x, y - text_h - 6), (x + text_w + 8, y)], fill=color)
             draw.text((x + 4, y - text_h - 4), label, fill=(10, 10, 10), font=font)
 

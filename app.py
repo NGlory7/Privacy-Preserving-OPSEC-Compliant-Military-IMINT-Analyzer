@@ -1,306 +1,135 @@
 """
-AegisIMINT: Privacy-Preserving & OPSEC-Compliant Military IMINT Analyzer
-Streamlit Tactical Intelligence Dashboard (100% Offline / Air-Gapped)
+AegisIMINT — Streamlit interface. All analysis runs locally; see src/pipeline.py.
+
+    streamlit run app.py
 """
 
 import os
 import sys
-from io import BytesIO
-from PIL import Image
+
 import streamlit as st
+from PIL import Image
 
-# Ensure project root is in sys.path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.opsec.anonymizer import OPSECAnonymizer
-from src.vision.detector import LocalMilitaryDetector
-from src.database.vector_matcher import VectorMatcher
-from src.database.camouflage_db import CamouflageDatabase
-from src.database.military_hardware_db import MilitaryHardwareDatabase
-from src.reasoning.correlation_engine import CorrelationEngine
-from src.reasoning.intelligence_reporter import IntelligenceReporter
-from src.utils.visualizer import TacticalVisualizer
+from src.database.camouflage_db import CamouflageDatabase  # noqa: E402
+from src.database.military_hardware_db import MilitaryHardwareDatabase  # noqa: E402
+from src.models import ModelsMissingError, device, models_available  # noqa: E402
+from src.pipeline import analyze  # noqa: E402
+from src.reasoning.intelligence_reporter import IntelligenceReporter  # noqa: E402
+from src.utils.visualizer import TacticalVisualizer  # noqa: E402
+from src.vision.detector import DEFAULT_THRESHOLDS  # noqa: E402
 
-# --- PAGE CONFIGURATION ---
-st.set_page_config(
-    page_title="AegisIMINT // Military OSINT Analyzer",
-    page_icon="🛡️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# --- CUSTOM TACTICAL STYLING ---
-st.markdown("""
+st.set_page_config(page_title="AegisIMINT", page_icon="🛡️", layout="wide")
+st.markdown(
+    """
 <style>
-    /* Dark tactical military theme overrides */
-    .stApp {
-        background-color: #0d1117;
-        color: #c9d1d9;
-        font-family: 'Courier New', Courier, monospace;
-    }
-    .tactical-header {
-        border-bottom: 2px solid #238636;
-        padding-bottom: 8px;
-        margin-bottom: 18px;
-    }
-    .opsec-badge-safe {
-        background-color: #238636;
-        color: #ffffff;
-        padding: 4px 10px;
-        border-radius: 4px;
-        font-weight: bold;
-        display: inline-block;
-        font-size: 0.85em;
-    }
-    .hud-metric-card {
-        background: #161b22;
-        border: 1px solid #30363d;
-        border-left: 4px solid #2ea043;
-        border-radius: 6px;
-        padding: 14px;
-        margin-bottom: 12px;
-    }
-    .hud-title {
-        color: #8b949e;
-        font-size: 0.85em;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    .hud-value {
-        color: #58a6ff;
-        font-size: 1.6em;
-        font-weight: bold;
-    }
+  .stApp { background:#0d1117; color:#c9d1d9; }
+  .card { background:#161b22; border:1px solid #30363d; border-left:4px solid #2ea043; border-radius:6px; padding:12px; }
+  .card .t { color:#8b949e; font-size:.8em; text-transform:uppercase; letter-spacing:1px; }
+  .card .v { color:#58a6ff; font-size:1.25em; font-weight:600; }
+  .card.warn { border-left-color:#d29922; }
 </style>
-""", unsafe_allow_html=True)
-
-
-# --- SIDEBAR CONFIGURATION ---
-st.sidebar.markdown("## 🛡️ AEGIS-IMINT ENGINE")
-st.sidebar.caption("Air-Gapped Defense OSINT Analyzer v1.0")
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🔒 OPSEC Controls")
-redact_faces = st.sidebar.checkbox("Auto-Redact Faces / Biometrics", value=True)
-redaction_mode = st.sidebar.selectbox(
-    "Redaction Style",
-    ["pixelate", "censor_bar", "blur"],
-    index=0,
-    help="Pixelate: Tactical mosaic block. Censor bar: Solid black box. Blur: Gaussian kernel."
+""",
+    unsafe_allow_html=True,
 )
-blur_intensity = st.sidebar.slider("Redaction Intensity", 5, 30, 15)
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### ⚙️ Engine Status")
-st.sidebar.success("🔒 100% Air-Gapped / Offline Local")
-st.sidebar.caption("Zero external network dependencies. All detections and correlations run strictly on your machine.")
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🎯 Hardware Cross-Reference")
-all_weapons = MilitaryHardwareDatabase.get_all_weapons()
-weapon_options = ["Auto-Detect / Heuristic"] + [f"{w['name']} ({w['origin_country']})" for w in all_weapons]
-selected_wpn_str = st.sidebar.selectbox("Small Arms Override", weapon_options)
-
-selected_weapon_id = None
-if selected_wpn_str != "Auto-Detect / Heuristic":
-    for w in all_weapons:
-        if w["name"] in selected_wpn_str:
-            selected_weapon_id = w["id"]
-            break
-
-all_vehicles = MilitaryHardwareDatabase.get_all_vehicles()
-vehicle_options = ["None Detected in Primary Frame"] + [f"{v['name']} ({v['type']})" for v in all_vehicles]
-selected_veh_str = st.sidebar.selectbox("Combat Vehicle Override", vehicle_options)
-
-selected_vehicle_id = None
-if selected_veh_str != "None Detected in Primary Frame":
-    for v in all_vehicles:
-        if v["name"] in selected_veh_str:
-            selected_vehicle_id = v["id"]
-            break
-
-
-# --- MAIN HEADER ---
-st.markdown('<div class="tactical-header"><h2>🎯 MILITARY IMINT & PATTERN ATTRIBUTION ANALYZER</h2><span class="opsec-badge-safe">🛡️ 100% AIR-GAPPED OPSEC MODE</span></div>', unsafe_allow_html=True)
-st.write("Extract military camouflage signatures, equipment correlations, operator nations, and deployment theaters locally without leaking sensitive biometrics or raw imagery.")
-
-# --- IMAGE INGESTION ---
-col_upload, col_samples = st.columns([2, 1])
-
-with col_upload:
-    uploaded_file = st.file_uploader(
-        "Upload Reconnaissance / OSINT Imagery (JPEG, PNG, WEBP)",
-        type=["jpg", "jpeg", "png", "webp"]
-    )
-
-with col_samples:
-    st.markdown("**Or Test Preset Camouflage Swatches:**")
-    sample_dir = os.path.join(os.path.dirname(__file__), "data", "sample_images")
-    preset_choice = st.selectbox(
-        "Load Preset Sample",
-        ["None (Use Upload)", "MultiCam (US / NATO / SSO)", "EMR / Digital Flora (Russia)", "Flecktarn (Germany)", "TSK Digital (Turkey)"]
-    )
-
-active_image = None
-
-if preset_choice != "None (Use Upload)" and os.path.exists(sample_dir):
-    filename_map = {
-        "MultiCam (US / NATO / SSO)": "sample_multicam.png",
-        "EMR / Digital Flora (Russia)": "sample_emr_digital_flora.png",
-        "Flecktarn (Germany)": "sample_flecktarn.png",
-        "TSK Digital (Turkey)": "sample_turkish_digital.png"
-    }
-    sample_path = os.path.join(sample_dir, filename_map[preset_choice])
-    if os.path.exists(sample_path):
-        active_image = Image.open(sample_path)
-        st.info(f"Loaded synthetic reference preset: **{preset_choice}**")
-
-elif uploaded_file is not None:
-    active_image = Image.open(uploaded_file)
-
-
-# --- PROCESSING PIPELINE ---
-if active_image is not None:
-    st.markdown("---")
-
-    # Step 1: Pre-flight OPSEC Sanitization
-    anonymizer = OPSECAnonymizer(
-        redact_faces=redact_faces,
-        redaction_mode=redaction_mode,
-        intensity=blur_intensity
-    )
-    sanitized_image, opsec_manifest = anonymizer.process(active_image)
-
-    # Step 2: Local Military Object Detection
-    detector = LocalMilitaryDetector()
-    detection_results = detector.analyze_image(sanitized_image)
-
-    # Step 3: Camouflage Feature Matching
-    camo_detection = next((d for d in detection_results["detections"] if d["category"] == "uniform"), None)
-    camo_patch = camo_detection["crop"] if camo_detection else sanitized_image
-    camo_matches = VectorMatcher.match_camouflage(camo_patch, top_k=3)
-
-    # Step 4: Joint Correlation
-    correlation = CorrelationEngine.correlate(
-        camo_matches=camo_matches,
-        detected_weapon_id=selected_weapon_id or ("wpn_ak74m" if "EMR" in camo_matches[0]["name"] else "wpn_m4a1"),
-        detected_vehicle_id=selected_vehicle_id,
-        detected_gear_id="gear_6b47_helmet" if "EMR" in camo_matches[0]["name"] else "gear_fast_helmet"
-    )
-
-    # Top Metrics Banner
-    m1, m2, m3, m4 = st.columns(4)
-    top_camo = camo_matches[0]
-    top_country = correlation["top_candidate_nation"]
-    top_conf = correlation["top_confidence_percentage"]
-    theaters = correlation["suspected_theaters"][0] if correlation["suspected_theaters"] else "Global"
-
-    with m1:
-        st.markdown(f"""
-        <div class="hud-metric-card">
-            <div class="hud-title">Primary Pattern</div>
-            <div class="hud-value" style="font-size: 1.1em; color: #3fb950;">{top_camo['name'][:22]}...</div>
-            <span style="color: #8b949e; font-size: 0.85em;">Confidence: {top_camo['confidence']}%</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with m2:
-        st.markdown(f"""
-        <div class="hud-metric-card">
-            <div class="hud-title">Candidate Nation / Entity</div>
-            <div class="hud-value" style="font-size: 1.2em; color: #58a6ff;">{top_country}</div>
-            <span style="color: #8b949e; font-size: 0.85em;">Attribution: {top_conf}%</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with m3:
-        st.markdown(f"""
-        <div class="hud-metric-card">
-            <div class="hud-title">Likely Conflict Theater</div>
-            <div class="hud-value" style="font-size: 1.0em; color: #d29922;">{theaters}</div>
-            <span style="color: #8b949e; font-size: 0.85em;">Geographic Probability</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with m4:
-        st.markdown(f"""
-        <div class="hud-metric-card">
-            <div class="hud-title">OPSEC Assurance</div>
-            <div class="hud-value" style="font-size: 1.1em; color: #bc8cff;">AIR-GAPPED</div>
-            <span style="color: #8b949e; font-size: 0.85em;">Zero Data Outbound</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Detailed Analysis Tabs
-    tab_vis, tab_matrix, tab_camo, tab_report = st.tabs([
-        "👁️ Tactical Vision & Detections",
-        "📊 Joint Attribution Matrix",
-        "🎨 Camopedia Pattern Breakdown",
-        "📄 Official IMINT Dossier"
-    ])
-
-    with tab_vis:
-        col_img1, col_img2 = st.columns(2)
-        hud_image = TacticalVisualizer.draw_detections(sanitized_image, detection_results["detections"])
-
-        with col_img1:
-            st.markdown("#### 🔒 Sanitized Source (OPSEC Secured)")
-            st.image(sanitized_image, use_container_width=True)
-            st.caption(f"Stripped {opsec_manifest['metadata_sanitized']['stripped_tags']} EXIF tags. Biometrics: {opsec_manifest['biometric_sanitized']['faces_detected']} face(s) redacted.")
-
-        with col_img2:
-            st.markdown("#### 🎯 Tactical HUD Detection Overlays")
-            st.image(hud_image, use_container_width=True)
-            st.caption("Green: Uniform/Camouflage swatch | Red: Weapon silhouette | Cyan: Tactical headgear")
-
-    with tab_matrix:
-        st.markdown("### ⚖️ Operator Attribution Probability")
-        for nation_info in correlation["all_ranked_nations"]:
-            st.write(f"**{nation_info['country']}** — `{nation_info['probability_percentage']}%`")
-            st.progress(nation_info["probability_percentage"] / 100.0)
-            with st.expander("🔎 View Supporting Indicators"):
-                for ev in nation_info["supporting_evidence"]:
-                    st.markdown(f"- {ev}")
-
-        st.markdown("### 📍 Suspected Deployment Theaters")
-        for th in correlation["suspected_theaters"]:
-            st.markdown(f"- **{th}**")
-
-    with tab_camo:
-        st.markdown("### 🎖️ Top Camouflage Database Matches")
-        for idx, match in enumerate(camo_matches, 1):
-            st.markdown(f"#### #{idx} {match['name']} — `{match['confidence']}% Match`")
-            col_info, col_swatch = st.columns([3, 1])
-            with col_info:
-                st.write(f"**Origin Country:** {match['origin_country']}")
-                st.write(f"**Design Class:** {match['pattern_type']}")
-                st.write(f"**Description:** {match['description']}")
-                st.markdown("**Primary Military Branches:**")
-                for op in match["primary_operators"]:
-                    st.markdown(f"- {op['country']} ({op['branch']})")
-            with col_swatch:
-                st.caption("Extracted Palette:")
-                swatch_img = TacticalVisualizer.render_palette_strip(match["palette_hex"])
-                st.image(swatch_img, use_container_width=True)
-            st.markdown("---")
-
-    with tab_report:
-        custom_notes = st.text_area("Optional Field Observations / Analyst Notes:", "")
-        if st.button("Generate Final IMINT Dossier", type="primary"):
-            with st.spinner("Compiling standardized military intelligence assessment..."):
-                dossier = IntelligenceReporter.generate_dossier(
-                    opsec_manifest=opsec_manifest,
-                    camo_matches=camo_matches,
-                    correlation_result=correlation,
-                    custom_notes=custom_notes
-                )
-                st.markdown(dossier["markdown_report"])
-                st.download_button(
-                    label="💾 Download Dossier (.md)",
-                    data=dossier["markdown_report"],
-                    file_name=f"{dossier['dossier_id']}.md",
-                    mime="text/markdown"
-                )
-
+# ---------------- sidebar ----------------
+st.sidebar.markdown("## 🛡️ AegisIMINT")
+avail = models_available()
+if all(avail.values()):
+    st.sidebar.success(f"Models found locally · running on `{device()}`")
 else:
-    st.info("👈 Upload an image or select a preset camouflage swatch from the left to commence intelligence analysis.")
+    missing = ", ".join(k for k, v in avail.items() if not v)
+    st.sidebar.error(f"Missing model weights: {missing}. Run `python tools/download_models.py` once.")
+
+st.sidebar.markdown("### Privacy")
+redact_faces = st.sidebar.checkbox("Redact faces before analysis", value=True)
+redaction_mode = st.sidebar.selectbox("Redaction style", ["pixelate", "censor_bar", "blur"])
+intensity = st.sidebar.slider("Redaction strength", 5, 30, 15)
+
+st.sidebar.markdown("### Detection thresholds")
+thresholds = {c: st.sidebar.slider(c, 0.05, 0.6, float(v), 0.01) for c, v in DEFAULT_THRESHOLDS.items()}
+
+st.sidebar.markdown("### Analyst identification (optional)")
+st.sidebar.caption("If you recognise something by eye, set it here. It replaces the model's guess and is labelled 'analyst' in the report.")
+overrides = []
+for kind, items in (("weapon", MilitaryHardwareDatabase.get_all_weapons()),
+                    ("vehicle", MilitaryHardwareDatabase.get_all_vehicles()),
+                    ("gear", MilitaryHardwareDatabase.get_all_gear()),
+                    ("camouflage", CamouflageDatabase.get_all())):
+    names = {i["name"]: i["id"] for i in items}
+    choice = st.sidebar.selectbox(kind.capitalize(), ["— use model —"] + list(names))
+    if choice != "— use model —":
+        overrides.append({"kind": kind, "id": names[choice]})
+
+# ---------------- main ----------------
+st.markdown("## Military imagery analysis — local & offline")
+st.caption("Detection: OWLv2 · identification: CLIP ViT-L/14 · face redaction: YuNet. "
+           "Measured accuracy is in EVALUATION.md; results are indicators to verify, not conclusions.")
+
+upload = st.file_uploader("Image (JPEG, PNG, WEBP)", type=["jpg", "jpeg", "png", "webp"])
+if upload is None:
+    st.info("Upload an image to start. Nothing leaves this machine.")
+    st.stop()
+
+try:
+    with st.spinner("Analysing locally…"):
+        result = analyze(Image.open(upload), redact_faces=redact_faces, redaction_mode=redaction_mode,
+                         intensity=intensity, thresholds=thresholds, analyst_overrides=overrides)
+except ModelsMissingError as exc:
+    st.error(str(exc))
+    st.stop()
+
+det = result["detection"]
+corr = result["correlation"]
+man = result["opsec_manifest"]
+
+c1, c2, c3, c4 = st.columns(4)
+c1.markdown(f'<div class="card"><div class="t">Detections</div><div class="v">{det["detections_count"]}</div></div>', unsafe_allow_html=True)
+camo = result["camo_matches"][0] if result["camo_matches"] else None
+c2.markdown(f'<div class="card"><div class="t">Top camouflage guess</div><div class="v">{camo["name"].split(" (")[0] + f" · {camo["confidence"]:.0f}%" if camo else "—"}</div></div>', unsafe_allow_html=True)
+if corr["inconclusive"]:
+    c3.markdown('<div class="card warn"><div class="t">Attribution</div><div class="v">Inconclusive</div></div>', unsafe_allow_html=True)
+else:
+    c3.markdown(f'<div class="card"><div class="t">Attribution (evidence share)</div><div class="v">{corr["top_candidate_nation"]} · {corr["top_confidence_percentage"]}%</div></div>', unsafe_allow_html=True)
+c4.markdown(f'<div class="card"><div class="t">Outbound connections</div><div class="v">{result["network"]["outbound_attempts_blocked"]} blocked · {result["timings"]["total_s"]} s</div></div>', unsafe_allow_html=True)
+
+tab_vis, tab_attr, tab_report = st.tabs(["Detections", "Attribution", "Report"])
+
+with tab_vis:
+    a, b = st.columns(2)
+    a.image(result["sanitized_image"], caption=(
+        f"Sanitized: {man['metadata_sanitized']['stripped_tags']} metadata tags removed, "
+        f"{man['biometric_sanitized'].get('faces_detected', 0)} face(s) redacted ({man['biometric_sanitized'].get('detector_backend')})"),
+        width="stretch")
+    b.image(TacticalVisualizer.draw_detections(result["sanitized_image"], det["detections"]),
+            caption="Green: personnel · red: weapon · yellow: vehicle · blue: helmet", width="stretch")
+    if not det["detections"]:
+        st.warning("Nothing passed the detection thresholds. Try lowering them in the sidebar.")
+    for d in det["detections"]:
+        with st.expander(f"{d['label']} — detector score {d['confidence']:.2f}"):
+            x, y = st.columns([1, 2])
+            x.image(d["crop"], width="stretch")
+            for r in d.get("identification", []):
+                y.write(f"{r['name']}")
+                y.progress(min(1.0, r["probability"]), text=f"{r['probability'] * 100:.0f}%")
+
+with tab_attr:
+    st.caption(corr["method"])
+    if corr["inconclusive"]:
+        st.warning(f"Inconclusive: {corr['inconclusive_reason']}")
+    for n in corr["all_ranked_nations"]:
+        st.write(f"**{n['country']}** — {n['evidence_share_percentage']}% of evidence weight")
+        st.progress(n["evidence_share_percentage"] / 100)
+        with st.expander("Based on"):
+            for ev in n["supporting_evidence"]:
+                st.markdown(f"- {ev}")
+    if corr["evidence_ignored"]:
+        st.markdown("**Not used (below threshold):** " + ", ".join(f"{e['kind']} `{e['id']}`" for e in corr["evidence_ignored"]))
+
+with tab_report:
+    notes = st.text_area("Analyst notes (optional)")
+    dossier = IntelligenceReporter.generate_dossier(result, custom_notes=notes)
+    st.markdown(dossier["markdown_report"])
+    st.download_button("Download report (.md)", dossier["markdown_report"], file_name=f"{dossier['dossier_id']}.md", mime="text/markdown")

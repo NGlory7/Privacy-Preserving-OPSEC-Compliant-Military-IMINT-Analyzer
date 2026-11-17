@@ -1,152 +1,127 @@
-# 🛡️ AegisIMINT: Privacy-Preserving & OPSEC-Compliant Military IMINT Analyzer
+# 🛡️ AegisIMINT — offline military imagery analysis
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![OPSEC: Verified](https://img.shields.io/badge/OPSEC-Air--Gapped%20Certified-success.svg)](#-opsec--privacy-architecture)
-[![OSINT: Imagery Intelligence](https://img.shields.io/badge/Domain-Military%20IMINT-red.svg)](#-features)
-[![UI: Streamlit](https://img.shields.io/badge/Interface-Streamlit%20Tactical%20HUD-orange.svg)](#-quick-start)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 
-> **AegisIMINT** is an open-source, 100% air-gapped, operational-security-first (OPSEC) military imagery intelligence (IMINT) analyzer. It automatically classifies military camouflage patterns, detects small arms, armored vehicles, and tactical equipment, and computes joint attribution probabilities for operator nations, military branches, and conflict theaters—**with zero outbound network traffic and zero biometric leakage.**
+AegisIMINT looks at a photo and tells you what military equipment and uniforms it can
+see, entirely on your own machine:
 
----
+1. **Sanitizes** the image: strips EXIF/GPS/camera metadata and pixelates faces (YuNet face detector).
+2. **Detects** personnel, rifles, machine guns, rocket launchers, tanks, armored vehicles,
+   pickup trucks and helmets with **OWLv2**, an open-vocabulary detector.
+3. **Identifies** each crop against a catalog (AK-74M vs M4A1, T-72B3 vs Bradley, MultiCam vs EMR…)
+   with **CLIP ViT-L/14**, zero-shot or with your own reference photos.
+4. **Ranks candidate operator countries** from what was actually identified, and says
+   *inconclusive* when the evidence is thin.
 
-## 🎯 The Problem & Our OPSEC-First Solution
+Everything runs inside a **network guard** that blocks and counts any outbound connection
+attempt, so "offline" is enforced, not just promised. Each report shows the count (expected: 0).
 
-In traditional intelligence and OSINT analysis, uploading field imagery to commercial cloud APIs poses severe **operational security (OPSEC)** risks:
-- ❌ **Biometric Leaks:** Faces of friendly, neutral, or reconnaissance personnel exposed to external cloud servers.
-- ❌ **Geolocation Leaks:** Embedded EXIF, GPS coordinates, camera serials, and timestamps exposed.
-- ❌ **Network Exposure:** Unencrypted or logged outbound API requests violate classified or air-gapped network protocols.
+> **How accurate is it?** See [EVALUATION.md](EVALUATION.md): detection recall, false alarms and
+> top-1/top-3 identification accuracy on a labelled Wikimedia Commons set, next to chance level.
+> Short version: finding *that* there is a rifle or an armored vehicle works well (95–100 % on the set,
+> no false alarms on everyday negatives); telling *which* rifle it is is much harder (42 % top-1 zero-shot,
+> 55 % with reference photos, vs 11 % chance). Camouflage accuracy has **not been measured yet**.
+> Treat identifications as hints to verify by eye.
 
-### 🛡️ How AegisIMINT Solves This (100% Air-Gapped IMINT):
-1. **Pre-Flight Metadata Purge:** All EXIF metadata, GPS coordinates, and camera fingerprints are stripped *locally* before any inspection.
-2. **Automated Facial Redaction:** Human faces and biometrics are obfuscated using local tactical mosaic pixelation or censor bars.
-3. **Local Computer Vision:** Uniform fabrics, firearm profiles, and gear are segmented entirely on your local machine.
-4. **Offline Camopedia Vector Matching:** Camouflage classification is computed locally using mathematical color-space and texture signatures.
-5. **Zero Outbound Data:** The entire application operates without an internet connection. No API keys, no cloud dependencies, and zero data leaves your hardware.
+## What changed in v2
 
----
+Version 1 did not run any detection model. It drew boxes at fixed positions
+(e.g. "uniform" was always the middle of the image at 91 % confidence) and inferred the weapon
+from the camouflage guess. v2 replaces that with real models, real scores and a measured
+evaluation. The synthetic sample swatches were removed because they were not representative.
 
-## 🏗️ System Architecture
+## Quick start
 
-```mermaid
-flowchart TD
-    A["Raw Recon / OSINT Image"] --> B["Pre-Flight OPSEC Sanitizer"]
-    
-    subgraph Air_Gapped_Engine ["🔒 100% Local Machine (Air-Gapped / Zero Network Calls)"]
-        B --> B1["EXIF & GPS Sanitizer"]
-        B --> B2["Facial De-Identification (Mosaic Pixelation)"]
-        B1 & B2 --> C["Sanitized Image Feed"]
-        
-        C --> D["Local Tactical Detector"]
-        D --> D1["Uniform ROI Crop"]
-        D --> D2["Small Arms Silhouette"]
-        D --> D3["Combat Vehicle Profile"]
-        
-        D1 --> E["Color & Texture Vector Matcher"]
-        E <--> DB1[("Camopedia Reference DB")]
-        
-        D2 & D3 <--> DB2[("Military Hardware DB")]
-        
-        E & DB2 --> F["Joint Bayesian Correlation Engine"]
-        F --> G["Ranked Operator Attribution Matrix"]
-    end
-    
-    G --> H["Standardized Military IMINT Dossier (.md / SITREP)"]
-```
-
----
-
-## 🚀 Key Features
-
-* **🎨 Camouflage Pattern Recognition:** Matches uniform textures against standard global patterns (MultiCam, EMR / Digital Flora, MARPAT, Flecktarn, CADPAT, M90 Splinter, TSK Digital, Type 07, IDF Olive Drab, Partizan-M SS-Autumn, All-Black Tactical, etc.).
-* **⚔️ Cross-Asset Hardware Correlation:** Cross-references small arms (AK-74M, AKM, M4A1, MPT-76, HK416), armored vehicles (BTR-82A, BMP-2, Bradley, Kirpi, Toyota Technical), and ballistic gear (FAST vs. 6B47).
-* **📍 Theater & Unit Attribution:** Computes joint probability distributions indicating most likely operator nations, specialized brigades, and active conflict theaters.
-* **🔒 100% Air-Gapped & Offline:** Operates in isolated, disconnected, and classified lab environments. No third-party API keys required.
-* **📊 Tactical HUD Interface:** Dark-mode Streamlit dashboard with tactical bracket overlays and extracted color palette strips.
-* **📄 Standardized SITREP Reports:** One-click exportable Military Intelligence Assessment Reports in Markdown.
-
----
-
-## 📁 Repository Structure
-
-```
-.
-├── app.py                     # Streamlit Tactical Intelligence Dashboard (Offline)
-├── cli_analyze.py             # Command-line assessment utility
-├── test_pipeline.py           # Integration test suite
-├── generate_samples.py        # Synthetic test swatch generator
-├── requirements.txt           # Project dependencies
-├── .env.example               # Local configuration template
-├── LICENSE                    # MIT License with research disclaimer
-├── data/
-│   └── sample_images/         # Non-sensitive synthetic reference samples
-└── src/
-    ├── opsec/                 # Privacy & OPSEC sanitization engine
-    │   ├── metadata_sanitizer.py  # EXIF / GPS purging
-    │   ├── face_redactor.py       # Biometric masking & pixelation
-    │   └── anonymizer.py          # Pre-flight coordinator
-    ├── vision/                # Local Computer Vision & ROI extraction
-    │   ├── detector.py            # Local tactical entity detector
-    │   └── patch_extractor.py     # Swatch isolate & normalizer
-    ├── database/              # Knowledge bases & vector index
-    │   ├── camouflage_db.py       # Camopedia reference catalog
-    │   ├── military_hardware_db.py# Small arms & armor database
-    │   └── vector_matcher.py      # Color space & texture distance matcher
-    ├── reasoning/             # Intelligence correlation
-    │   ├── correlation_engine.py  # Bayesian operator attribution matrix
-    │   └── intelligence_reporter.py # Standardized SITREP dossier compiler
-    └── utils/
-        └── visualizer.py          # Tactical HUD overlays & swatches
-```
-
----
-
-## ⚡ Quick Start
-
-### 1. Clone Repository
 ```bash
 git clone https://github.com/NGlory7/Privacy-Preserving-OPSEC-Compliant-Military-IMINT-Analyzer.git
 cd Privacy-Preserving-OPSEC-Compliant-Military-IMINT-Analyzer
-```
+python -m venv .venv && .venv\Scripts\activate        # Linux/macOS: source .venv/bin/activate
 
-### 2. Install Dependencies
-```bash
+# PyTorch for your hardware (pick one)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128   # NVIDIA GPU
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu     # CPU only
+
 pip install -r requirements.txt
+python tools/download_models.py      # one time, ~2.5 GB, the only step that needs internet
 ```
 
-### 3. Launch the Tactical Dashboard
+Then, offline:
+
 ```bash
-streamlit run app.py
+streamlit run app.py                          # web UI
+python cli_analyze.py photo.jpg --json        # CLI → output/ (sanitized image, overlay, report, JSON)
+python cli_analyze.py photo.jpg --weapon wpn_ak74m   # add your own identification
 ```
 
-### 4. Or Run via CLI
+A GPU makes analysis take a couple of seconds per image; on CPU expect tens of seconds.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Image] --> B[Strip metadata] --> C[Redact faces<br/>YuNet]
+    C --> D[Detect<br/>OWLv2]
+    D -->|weapon / vehicle / helmet crops| E[Identify<br/>CLIP + reference photos]
+    D -->|personnel crops| F[Camouflage<br/>CLIP + reference photos]
+    E & F --> G[Attribution<br/>weighted evidence share]
+    G --> H[Report]
+    subgraph guard [network guard: outbound connections blocked and counted]
+      B
+      C
+      D
+      E
+      F
+      G
+    end
+```
+
+- **Detection thresholds** per category are adjustable in the UI; defaults were chosen on the eval set.
+- **"Unknown" is a real answer.** Every classifier has an *other / unknown* option, so it can decline
+  to force a catalog match.
+- **Attribution** = Σ (kind weight × model probability × catalog operator weight). The operator weights
+  in `src/database/` are hand-assigned priors, not learned, and the output is a *relative evidence
+  share*, not a calibrated probability. Evidence below 35 % probability is ignored and listed as such.
+- **Reference photos** in `data/reference/<kind>/<catalog_id>/` make identification few-shot instead of
+  zero-shot (see [data/reference/README.md](data/reference/README.md)).
+
+## Evaluating it yourself
+
 ```bash
-python cli_analyze.py path/to/image.jpg
+python tools/build_eval_set.py --per-class 6   # downloads freely licensed photos from Wikimedia Commons
+python tools/evaluate.py                       # writes EVALUATION.md and eval/results.json
+pytest                                         # unit tests; model tests run when weights are present
 ```
 
----
+`eval/manifest.csv` records the licence, author and source page of every evaluation image.
 
-## 🧪 Running Automated Tests
+## Limitations
 
-Verify end-to-end functionality offline with the included test suite:
-```bash
-python test_pipeline.py
+- Labels in the eval set come from Wikimedia Commons categories and can be noisy; the set is small.
+- Faces that are tiny, masked or turned away can be missed by the redactor. Check before sharing.
+- Equipment and uniforms are exported, captured, copied and sold as surplus; a match is never proof
+  of who is in the picture.
+- The catalogs cover 9 small arms, 6 vehicles, 2 helmets and 14 camouflage patterns.
+
+## Project layout
+
+```
+app.py / cli_analyze.py      UI and CLI (both call src/pipeline.py)
+src/pipeline.py              sanitize → detect → identify → attribute, inside the network guard
+src/models.py                local model registry (offline-only loading)
+src/opsec/                   metadata sanitizer, face redactor, network guard
+src/vision/                  OWLv2 detector, CLIP classifier, crops
+src/database/                camouflage & hardware catalogs, camouflage matcher
+src/reasoning/               attribution engine, report generator
+tools/                       model download, eval-set builder, evaluator
+tests/                       pytest suite
 ```
 
----
+## Ethical use
 
-## ⚖️ Ethical Use & Disclaimer
+For research, journalism, education and defensive OSINT. Not for targeting, surveillance of
+individuals or any unlawful purpose.
 
-```
-DISCLAIMER:
-This tool is developed strictly for academic research, open-source verification,
-defensive intelligence (OSINT), and educational purposes. It analyzes visual data
-points locally to assist researchers, journalists, and defense analysts.
-It is NOT designed or authorized for offensive targeting, combat operations,
-or unlawful surveillance.
-```
+## License
 
----
-
-## 🤝 Contributing
-Contributions from the OSINT, Computer Vision, and Defense Analytics community are welcome! Feel free to submit issues or pull requests to expand the camouflage pattern database or hardware catalog.
+MIT. Model weights keep their own licences: OWLv2 (Apache-2.0), CLIP (MIT), YuNet (MIT).
